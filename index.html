@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Rotación · Gráfica Límite</title>
+<title>Base Ventas · Gráfica Límite</title>
 <meta name="robots" content="noindex, nofollow">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
@@ -322,6 +322,24 @@ tr.clic { cursor: pointer; }
           <option value="tienda_online">Tienda online</option>
         </select>
       </div>
+      <div class="fgroup">
+        <span class="flabel">Envío</span>
+        <select id="fEnvio" aria-label="Tipo de envío">
+          <option value="todos">Todos</option>
+          <option value="full">Full</option>
+          <option value="colecta">Colecta</option>
+          <option value="flex">Flex</option>
+          <option value="acuerdo">Acuerdo con el comprador</option>
+        </select>
+      </div>
+      <div class="fgroup">
+        <span class="flabel">Precio</span>
+        <select id="fMayorista" aria-label="Tipo de precio">
+          <option value="todos">Todos</option>
+          <option value="si">Solo mayorista</option>
+          <option value="no">Sin mayorista</option>
+        </select>
+      </div>
     </div>
   </header>
   <main id="main"></main>
@@ -390,7 +408,7 @@ const ICON = {
 function tag(kind, cls, label) { const t = h("span", { class: "tag " + cls }); t.innerHTML = ICON[kind]; t.append(document.createTextNode(label)); return t; }
 
 /* ===================== Config de la app (un solo lugar para tocar) ===================== */
-const APP = { id: "grafica-rotacion", nombre: "Rotación de ventas", version: "2026-10-02.2" };
+const APP = { id: "grafica-rotacion", nombre: "Rotación de ventas", version: "2026-10-05.1" };
 const UMBRALES = {
   frenadoDias: 14,   // días sin vender (habiendo vendido en 90 d) para marcar "Frenado"
   caida: -0.30,      // velocidad 30 d vs 90 d para "En caída"
@@ -458,6 +476,11 @@ const AYUDA = {
   "Unid. total": "Unidades válidas sumando todos los SKUs elegidos.",
   "Cargos ML": "Cargos por venta que descuenta Mercado Libre (sin envío).",
   "Ingreso neto": "Ingreso bruto − cargos de ML.",
+  "Unidades vía Full": "Unidades despachadas desde el depósito de Mercado Libre (Full) y qué % del total representan. Sirve para planificar los envíos a Full.",
+  "Ventas mayoristas": "Órdenes cobradas con precio por cantidad (escalones mayoristas de ML) y sus unidades. ML lo aplica solo a compradores empresa que llegan a la cantidad mínima.",
+  "% Full": "Unidades despachadas por Full ÷ unidades del mes.",
+  "Vtas. mayoristas": "Órdenes cobradas con precio por cantidad (escalones mayoristas).",
+  "Unid. Full": "Unidades despachadas desde el depósito de Mercado Libre (Full).",
   "Días seguidos sin venta": "Contador de días sin vender. Las filas rojas son rachas de 3 días o más.",
 };
 function ayuda(texto) {
@@ -504,7 +527,7 @@ const state = {
   pres: [], presMap: new Map(), presPorBase: new Map(), // presentaciones (sku_codigo)
   puedeImportar: false,
   seleccion: [], colorDe: new Map(),
-  periodo: "12m", desde: null, hasta: null, canal: "todos",
+  periodo: "12m", desde: null, hasta: null, canal: "todos", envio: "todos", mayorista: "todos",
   tab: "inicio",
   home: { filtro: "activos", q: "", orden: { col: "unid_30", dir: -1 } },
   cache: new Map(), // sku_base -> filas diarias
@@ -538,6 +561,8 @@ function leerHash() {
   if (p.get("desde")) state.desde = p.get("desde");
   if (p.get("hasta")) state.hasta = p.get("hasta");
   if (p.get("canal")) state.canal = p.get("canal");
+  if (p.get("envio")) state.envio = p.get("envio");
+  if (p.get("may")) state.mayorista = p.get("may");
 }
 function escribirHash() {
   const p = new URLSearchParams();
@@ -546,6 +571,8 @@ function escribirHash() {
   p.set("p", state.periodo);
   if (state.periodo === "custom") { if (state.desde) p.set("desde", state.desde); if (state.hasta) p.set("hasta", state.hasta); }
   if (state.canal !== "todos") p.set("canal", state.canal);
+  if (state.envio !== "todos") p.set("envio", state.envio);
+  if (state.mayorista !== "todos") p.set("may", state.mayorista);
   history.replaceState(null, "", "#" + p.toString());
 }
 
@@ -591,13 +618,14 @@ async function cargarCatalogo() {
 async function asegurarDatos(skus) {
   const faltan = [...new Set(skus.map(baseDe))].filter((k) => !state.cache.has(k));
   if (!faltan.length) return;
-  const filas = await rpcTodo("rot_diario_cod", { p_bases: faltan });
+  const filas = await rpcTodo("rot_diario_det", { p_skus: faltan });
   for (const k of faltan) state.cache.set(k, []);
   for (const f of filas) {
-    if (!state.cache.has(f.sku_base)) state.cache.set(f.sku_base, []);
-    state.cache.get(f.sku_base).push({
-      fecha: f.fecha, base: f.sku_base, cod: f.sku_codigo, canal: f.canal,
-      uv: Number(f.unid_validas) || 0, unv: Number(f.unid_no_validas) || 0, upub: Number(f.unid_pub) || 0,
+    if (!state.cache.has(f.sku)) state.cache.set(f.sku, []);
+    const uv = Number(f.unid_validas) || 0;
+    state.cache.get(f.sku).push({
+      fecha: f.fecha, base: f.sku, cod: f.sku, canal: f.canal, lg: f.logistica, may: f.mayorista === true,
+      uv, unv: Number(f.unid_no_validas) || 0, upub: uv,
       ing: Number(f.ingreso) || 0, car: Number(f.cargos) || 0, ven: f.ventas || 0,
     });
   }
@@ -610,7 +638,9 @@ function filasSeleccion() {
     const cod = codeOf(k);
     for (const f of rows) if (esBase(k) || f.cod === cod) out.push({ ...f, sku: k });
   }
-  return state.canal === "todos" ? out : out.filter((f) => f.canal === state.canal);
+  return out.filter((f) => (state.canal === "todos" || f.canal === state.canal)
+    && (state.envio === "todos" || f.lg === state.envio)
+    && (state.mayorista === "todos" || (state.mayorista === "si" ? f.may : !f.may)));
 }
 
 /* ===================== Cálculo (misma lógica que el Excel) ===================== */
@@ -638,7 +668,9 @@ function calcular() {
   const porDia = new Map();
   for (const f of filas) {
     let d = porDia.get(f.fecha);
-    if (!d) { d = { uv: 0, unv: 0, ing: 0, ingML: 0, car: 0, ven: 0, porSku: {} }; porDia.set(f.fecha, d); }
+    if (!d) { d = { uv: 0, unv: 0, ing: 0, ingML: 0, car: 0, ven: 0, uvFull: 0, venMay: 0, uvMay: 0, porSku: {} }; porDia.set(f.fecha, d); }
+    if (f.lg === "full") d.uvFull += f.uv;
+    if (f.may) { d.venMay += f.ven; d.uvMay += f.uv; }
     d.uv += f.uv; d.unv += f.unv; d.ing += f.ing; d.car += f.car; d.ven += f.ven;
     if (f.canal === "mercadolibre") d.ingML += f.ing;
     d.porSku[f.sku] = (d.porSku[f.sku] || 0) + f.uv;
@@ -648,7 +680,7 @@ function calcular() {
   let racha = 0;
   for (let i = 0; i < nd; i++) {
     const fecha = iso(n0 + i);
-    const d = porDia.get(fecha) || { uv: 0, unv: 0, ing: 0, ingML: 0, car: 0, ven: 0, porSku: {} };
+    const d = porDia.get(fecha) || { uv: 0, unv: 0, ing: 0, ingML: 0, car: 0, ven: 0, uvFull: 0, venMay: 0, uvMay: 0, porSku: {} };
     racha = d.uv > 0 ? 0 : racha + 1;
     dias.push({ fecha, mes: fecha.slice(0, 7), ...d, neto: d.ing - d.car, racha });
   }
@@ -666,8 +698,8 @@ function calcular() {
   const mesesMap = new Map();
   for (const d of dias) {
     let m = mesesMap.get(d.mes);
-    if (!m) { m = { mes: d.mes, uv: 0, unv: 0, ven: 0, ing: 0, ingML: 0, car: 0, diasVenta: 0, diasPer: 0, porSku: {} }; mesesMap.set(d.mes, m); }
-    m.ven += d.ven; m.uv += d.uv; m.unv += d.unv; m.ing += d.ing; m.ingML += d.ingML; m.car += d.car; m.diasPer++; if (d.uv > 0) m.diasVenta++;
+    if (!m) { m = { mes: d.mes, uv: 0, unv: 0, ven: 0, ing: 0, ingML: 0, car: 0, uvFull: 0, venMay: 0, uvMay: 0, diasVenta: 0, diasPer: 0, porSku: {} }; mesesMap.set(d.mes, m); }
+    m.uvFull += d.uvFull; m.venMay += d.venMay; m.uvMay += d.uvMay; m.ven += d.ven; m.uv += d.uv; m.unv += d.unv; m.ing += d.ing; m.ingML += d.ingML; m.car += d.car; m.diasPer++; if (d.uv > 0) m.diasVenta++;
     for (const [k, v] of Object.entries(d.porSku)) m.porSku[k] = (m.porSku[k] || 0) + v;
   }
   const meses = [...mesesMap.values()];
@@ -703,7 +735,7 @@ function calcular() {
     if (f.uv > 0 && (!x.ultima || f.fecha > x.ultima)) x.ultima = f.fecha;
   }
   const porPres = [...pm.values()].sort((a, b) => a.base.localeCompare(b.base, "es", { numeric: true }) || b.uv - a.uv);
-  const tot = dias.reduce((a, d) => ({ uv: a.uv + d.uv, unv: a.unv + d.unv, ven: a.ven + d.ven, ing: a.ing + d.ing, ingML: a.ingML + d.ingML, car: a.car + d.car }), { uv: 0, unv: 0, ven: 0, ing: 0, ingML: 0, car: 0 });
+  const tot = dias.reduce((a, d) => ({ uv: a.uv + d.uv, unv: a.unv + d.unv, ven: a.ven + d.ven, ing: a.ing + d.ing, ingML: a.ingML + d.ingML, car: a.car + d.car, uvFull: a.uvFull + d.uvFull, venMay: a.venMay + d.venMay, uvMay: a.uvMay + d.uvMay }), { uv: 0, unv: 0, ven: 0, ing: 0, ingML: 0, car: 0, uvFull: 0, venMay: 0, uvMay: 0 });
   const ultimaVenta = porSku.reduce((m, p) => (p.ultima && p.ultima > m ? p.ultima : m), "");
   return { desde, fin, dias, meses, huecos, tot, porPres, v30, v60, v90, sinVenta90, rachaMax: dias.reduce((m, d) => Math.max(m, d.racha), 0), porSku, ultimaVenta, hayDatos: filas.length > 0 };
 }
@@ -954,6 +986,8 @@ function insights(r) {
     const best = completos.reduce((a, b) => (b.uv > a.uv ? b : a)), worst = completos.reduce((a, b) => (b.uv < a.uv ? b : a));
     out.push(["ok", "neutral", `Mejor mes: ${fMes(best.mes)} (${nf0.format(best.uv)} u). Peor mes completo: ${fMes(worst.mes)} (${nf0.format(worst.uv)} u).`]);
   }
+  if (r.tot.venMay) out.push(["up", "good", `${nf0.format(r.tot.venMay)} venta${r.tot.venMay > 1 ? "s" : ""} mayorista${r.tot.venMay > 1 ? "s" : ""} (precio por cantidad) en el período: ${nf0.format(r.tot.uvMay)} unidad${r.tot.uvMay === 1 ? "" : "es"}.`]);
+  if (r.tot.uv && r.tot.uvFull / r.tot.uv >= 0.5) out.push(["ok", "neutral", `${fP(r.tot.uvFull / r.tot.uv)} de las unidades salieron por Full: la reposición del depósito de ML es clave para este SKU.`]);
   const canc = r.tot.uv + r.tot.unv > 0 ? r.tot.unv / (r.tot.uv + r.tot.unv) : 0;
   if (canc >= 0.05) out.push(["down", "warn", `Cancelación/devolución alta: ${fP(canc)} de las unidades del período.`]);
   return out;
@@ -965,6 +999,8 @@ function vistaResumen(r) {
   add("Período", `${fD(r.desde)} → ${fD(r.fin)} (${nf0.format(r.dias.length)} días)`);
   add("Unidades vendidas", fN(r.tot.uv));
   add("Ventas (órdenes)", fN(r.tot.ven));
+  add("Unidades vía Full", r.tot.uv ? `${fN(r.tot.uvFull)} (${fP(r.tot.uvFull / r.tot.uv)})` : "–");
+  add("Ventas mayoristas", r.tot.venMay ? `${fN(r.tot.venMay)} (${fN(r.tot.uvMay)} u)` : "–");
   add("Unidades por venta", r.tot.ven ? nf2.format(r.tot.uv / r.tot.ven) : "–");
   if (r.porSku.length > 1) for (const p of r.porSku) add(p.sku, fN(p.uv), true);
   add("Unidades no válidas", fN(r.tot.unv));
@@ -1056,16 +1092,17 @@ function vistaMensual(r) {
   const series = seriesDe(r, (i, k) => meses[i].porSku[k] || 0, meses.length);
   const chartEl = h("div", { class: "chart" });
   const multi = state.seleccion.length > 1 && state.seleccion.length <= 6;
-  const head = ["Mes", ...(multi ? state.seleccion.map((k) => `Unid. ${etiquetaSku(k)}`) : []), "Unid. total", "Ventas", "Unid./venta", "No válidas", "% no válidas", "Días con venta", "Días del período", "Unid./día", "Ingreso bruto", "Precio prom.", "Cargos ML %"];
+  const head = ["Mes", ...(multi ? state.seleccion.map((k) => `Unid. ${etiquetaSku(k)}`) : []), "Unid. total", "Ventas", "Unid./venta", "% Full", "Vtas. mayoristas", "No válidas", "% no válidas", "Días con venta", "Días del período", "Unid./día", "Ingreso bruto", "Precio prom.", "Cargos ML %"];
   const fila = (m, isTot) => h("tr", {},
     h("td", { text: isTot ? "Total" : fMes(m.mes) + (m.diasPer < new Date(Date.UTC(+m.mes.slice(0, 4), +m.mes.slice(5, 7), 0)).getUTCDate() ? " *" : "") }),
     ...(multi ? state.seleccion.map((k) => h("td", { class: "num", text: fN(m.porSku[k]) })) : []),
     h("td", { class: "num", text: fN(m.uv) }), h("td", { class: "num", text: fN(m.ven) }), h("td", { class: "num", text: m.ven ? nf2.format(m.uv / m.ven) : "–" }),
+    h("td", { class: "num", text: m.uv ? fP(m.uvFull / m.uv) : "–" }), h("td", { class: "num", text: fN(m.venMay) }),
     h("td", { class: "num", text: fN(m.unv) }), h("td", { class: "num", text: fP(m.uv + m.unv ? m.unv / (m.uv + m.unv) : null) }),
     h("td", { class: "num", text: fN(m.diasVenta) }), h("td", { class: "num", text: fN(m.diasPer) }), h("td", { class: "num", text: fN2(m.diasPer ? m.uv / m.diasPer : 0) }),
     h("td", { class: "num", text: fM(m.ing) }), h("td", { class: "num", text: fM(m.uv ? m.ing / m.uv : 0) }), h("td", { class: "num", text: fP(m.ingML ? m.car / m.ingML : null) }),
   );
-  const tot = meses.reduce((a, m) => { a.uv += m.uv; a.ven += m.ven; a.unv += m.unv; a.ing += m.ing; a.ingML += m.ingML; a.car += m.car; a.diasVenta += m.diasVenta; a.diasPer += m.diasPer; for (const [k, v] of Object.entries(m.porSku)) a.porSku[k] = (a.porSku[k] || 0) + v; return a; }, { uv: 0, ven: 0, unv: 0, ing: 0, ingML: 0, car: 0, diasVenta: 0, diasPer: 0, porSku: {} });
+  const tot = meses.reduce((a, m) => { a.uv += m.uv; a.ven += m.ven; a.uvFull += m.uvFull; a.venMay += m.venMay; a.uvMay += m.uvMay; a.unv += m.unv; a.ing += m.ing; a.ingML += m.ingML; a.car += m.car; a.diasVenta += m.diasVenta; a.diasPer += m.diasPer; for (const [k, v] of Object.entries(m.porSku)) a.porSku[k] = (a.porSku[k] || 0) + v; return a; }, { uv: 0, ven: 0, unv: 0, ing: 0, ingML: 0, car: 0, uvFull: 0, venMay: 0, uvMay: 0, diasVenta: 0, diasPer: 0, porSku: {} });
   const out = [
     h("div", { class: "card" },
       h("h2", { text: "Unidades vendidas por mes" }), h("p", { class: "sub", text: "Ventas válidas, apiladas por SKU." }),
@@ -1084,7 +1121,7 @@ function vistaDiario(r) {
   const series = seriesDe(r, (i, k) => dias[i].porSku[k] || 0, dias.length);
   const chartEl = h("div", { class: "chart" });
   const multi = state.seleccion.length > 1 && state.seleccion.length <= 6;
-  const head = ["Fecha", "Día", ...(multi ? state.seleccion.map((k) => `Unid. ${etiquetaSku(k)}`) : []), "Unid. total", "Ventas", "No válidas", "Ingreso bruto", "Cargos ML", "Ingreso neto", "Días seguidos sin venta"];
+  const head = ["Fecha", "Día", ...(multi ? state.seleccion.map((k) => `Unid. ${etiquetaSku(k)}`) : []), "Unid. total", "Ventas", "Unid. Full", "Vtas. mayoristas", "No válidas", "Ingreso bruto", "Cargos ML", "Ingreso neto", "Días seguidos sin venta"];
   const soloVentas = state._soloVentas || false;
   const tbody = h("tbody");
   const lista = [...dias].reverse().filter((d) => !soloVentas || d.uv > 0 || d.unv > 0);
@@ -1092,7 +1129,7 @@ function vistaDiario(r) {
     tbody.append(h("tr", { class: d.hueco ? "gap" : "" },
       h("td", { class: "num", style: "text-align:left", text: fD(d.fecha) }), h("td", { class: "muted", text: diaSem(d.fecha) }),
       ...(multi ? state.seleccion.map((k) => h("td", { class: "num", text: fN(d.porSku[k]) })) : []),
-      h("td", { class: "num", text: fN(d.uv) }), h("td", { class: "num", text: fN(d.ven) }), h("td", { class: "num", text: fN(d.unv) }), h("td", { class: "num", text: fM(d.ing) }),
+      h("td", { class: "num", text: fN(d.uv) }), h("td", { class: "num", text: fN(d.ven) }), h("td", { class: "num", text: fN(d.uvFull) }), h("td", { class: "num", text: fN(d.venMay) }), h("td", { class: "num", text: fN(d.unv) }), h("td", { class: "num", text: fM(d.ing) }),
       h("td", { class: "num", text: fM(d.car) }), h("td", { class: "num", text: fM(d.ing - d.car) }), h("td", { class: "num", text: d.racha ? d.racha : "–" })));
   }
   const chk = h("input", { type: "checkbox", id: "soloV", onchange: (e) => { state._soloVentas = e.target.checked; render(); } });
@@ -1244,6 +1281,8 @@ const FUNCIONAMIENTO = [
     "• SKUs: buscá por cualquier parte del texto o por el título de la publicación. Cada coincidencia tiene una casilla: tildá o destildá las que quieras sin que se cierre la lista, o usá \"Tildar todas\" (ej. escribí \"i s a v\" o \"208\" y traés todos). \"Listo\" o Escape cierra la lista.",
     "• Período: 90 días, 6 meses, 12 meses, todo, o un rango. Por defecto corta ayer (último día completo); para ver hoy, usá Rango con hasta = hoy.",
     "• Canal: todos, solo Mercado Libre o solo tienda.",
+    "• Envío: Full (sale del depósito de ML), Colecta, Flex o Acuerdo con el comprador. La tienda no tiene tipo de envío de ML: con un envío elegido, queda afuera.",
+    "• Precio: solo ventas mayoristas (cobradas con precio por cantidad, escalones de ML) o sin mayoristas. ML marca esas órdenes y solo las aplica a compradores empresa.",
     "• El link del navegador guarda lo que elegiste: si lo compartís, el otro ve lo mismo.",
   ]],
   ["Pestaña Inicio", [
@@ -1302,7 +1341,7 @@ function contextoTecnico() {
   return {
     app: APP.id, version: APP.version, url: location.href, pestana: state.tab, online: navigator.onLine,
     navegador: navigator.userAgent, pantalla: `${screen.width}x${screen.height}`, fecha_local: new Date().toLocaleString("es-AR"),
-    seleccion: state.seleccion.slice(0, 20), periodo: state.periodo, canal: state.canal, errores_recientes: erroresRecientes.slice(-10),
+    seleccion: state.seleccion.slice(0, 20), periodo: state.periodo, canal: state.canal, envio: state.envio, mayorista: state.mayorista, errores_recientes: erroresRecientes.slice(-10),
   };
 }
 function agregarCapturas(files) {
@@ -1494,12 +1533,12 @@ async function renderInterno() {
   // filtros
   for (const b of document.querySelectorAll("#segPeriodo button")) b.setAttribute("aria-pressed", String(b.dataset.p === state.periodo));
   $("#customRange").classList.toggle("hidden", state.periodo !== "custom");
-  $("#fCanal").value = state.canal;
+  $("#fCanal").value = state.canal; $("#fEnvio").value = state.envio; $("#fMayorista").value = state.mayorista;
   renderChips();
   const enInicio = state.tab === "inicio" || state.tab === "datos" || state.tab === "tickets";
   $("#segPeriodo").parentElement.style.opacity = enInicio ? 0.45 : 1;
-  $("#fCanal").parentElement.style.opacity = enInicio ? 0.45 : 1;
-  $("#segPeriodo").parentElement.title = enInicio ? "El período y el canal aplican a Resumen, Mensual y Diario." : "";
+  for (const id of ["#fCanal", "#fEnvio", "#fMayorista"]) $(id).parentElement.style.opacity = enInicio ? 0.45 : 1;
+  $("#segPeriodo").parentElement.title = enInicio ? "Período, canal, envío y precio aplican a Resumen, Mensual y Diario." : "";
 
   const m = main();
   if (state.tab === "datos") { m.replaceChildren(...vistaDatos()); return; }
@@ -1618,11 +1657,15 @@ async function exportar() {
   const res = [
     ["Rotación · " + skus.join(" + ")],
     ["Canal", state.canal === "todos" ? "Todos" : state.canal],
+    ["Envío", state.envio === "todos" ? "Todos" : state.envio],
+    ["Precio", { todos: "Todos", si: "Solo mayorista", no: "Sin mayorista" }[state.mayorista]],
     ["Período", `${r.desde} a ${r.fin}`],
     [],
     ["Unidades vendidas", r.tot.uv],
     ...r.porSku.map((p) => ["   " + p.sku, p.uv]),
     ["Ventas (órdenes)", r.tot.ven],
+    ["Unidades vía Full", r.tot.uvFull],
+    ["Ventas mayoristas", r.tot.venMay],
     ["Unidades no válidas", r.tot.unv],
     ["Ingreso bruto ($)", Math.round(r.tot.ing)],
     ["Unid./día 30 d", +r.v30.toFixed(2)], ["Unid./día 60 d", +r.v60.toFixed(2)], ["Unid./día 90 d", +r.v90.toFixed(2)],
@@ -1636,10 +1679,10 @@ async function exportar() {
   ];
   const ws1 = XLSX.utils.aoa_to_sheet(res); ws1["!cols"] = [{ wch: 48 }, { wch: 16 }];
   const multi = skus.length <= 12;
-  const mens = [["Mes", ...(multi ? skus.map((k) => "Unid. " + etiquetaSku(k)) : []), "Unid. total", "Ventas", "No válidas", "Días con venta", "Días del período", "Unid./día", "Ingreso bruto", "Precio prom.", "Cargos ML %"],
-    ...r.meses.map((m) => [fMes(m.mes), ...(multi ? skus.map((k) => m.porSku[k] || 0) : []), m.uv, m.ven, m.unv, m.diasVenta, m.diasPer, +(m.uv / m.diasPer).toFixed(2), Math.round(m.ing), m.uv ? Math.round(m.ing / m.uv) : 0, m.ingML ? +(m.car / m.ingML).toFixed(4) : 0])];
-  const diar = [["Fecha", ...(multi ? skus.map((k) => "Unid. " + etiquetaSku(k)) : []), "Unid. total", "Ventas", "No válidas", "Ingreso bruto", "Cargos ML", "Ingreso neto", "Días seguidos sin venta"],
-    ...r.dias.map((d) => [d.fecha, ...(multi ? skus.map((k) => d.porSku[k] || 0) : []), d.uv, d.ven, d.unv, Math.round(d.ing), Math.round(d.car), Math.round(d.ing - d.car), d.racha])];
+  const mens = [["Mes", ...(multi ? skus.map((k) => "Unid. " + etiquetaSku(k)) : []), "Unid. total", "Ventas", "Unid. Full", "Vtas. mayoristas", "No válidas", "Días con venta", "Días del período", "Unid./día", "Ingreso bruto", "Precio prom.", "Cargos ML %"],
+    ...r.meses.map((m) => [fMes(m.mes), ...(multi ? skus.map((k) => m.porSku[k] || 0) : []), m.uv, m.ven, m.uvFull, m.venMay, m.unv, m.diasVenta, m.diasPer, +(m.uv / m.diasPer).toFixed(2), Math.round(m.ing), m.uv ? Math.round(m.ing / m.uv) : 0, m.ingML ? +(m.car / m.ingML).toFixed(4) : 0])];
+  const diar = [["Fecha", ...(multi ? skus.map((k) => "Unid. " + etiquetaSku(k)) : []), "Unid. total", "Ventas", "Unid. Full", "Vtas. mayoristas", "No válidas", "Ingreso bruto", "Cargos ML", "Ingreso neto", "Días seguidos sin venta"],
+    ...r.dias.map((d) => [d.fecha, ...(multi ? skus.map((k) => d.porSku[k] || 0) : []), d.uv, d.ven, d.uvFull, d.venMay, d.unv, Math.round(d.ing), Math.round(d.car), Math.round(d.ing - d.car), d.racha])];
   XLSX.utils.book_append_sheet(wb, ws1, "Resumen");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(mens), "Mensual");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(diar), "Diario");
@@ -1691,6 +1734,8 @@ $("#segPeriodo").addEventListener("click", (e) => {
 $("#fDesde").addEventListener("change", (e) => { state.desde = e.target.value || null; render(); });
 $("#fHasta").addEventListener("change", (e) => { state.hasta = e.target.value || null; render(); });
 $("#fCanal").addEventListener("change", (e) => { state.canal = e.target.value; render(); });
+$("#fEnvio").addEventListener("change", (e) => { state.envio = e.target.value; render(); });
+$("#fMayorista").addEventListener("change", (e) => { state.mayorista = e.target.value; render(); });
 let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => { if (state.tab === "mensual" || state.tab === "diario") render(); }, 200); });
 
 initPicker();
