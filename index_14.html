@@ -1,0 +1,1703 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rotación · Gráfica Límite</title>
+<meta name="robots" content="noindex, nofollow">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
+<style>
+/* ===================== Tokens (paleta Gráfica Límite) =====================
+   Marca: naranja #FF740E · teal oscuro #004E55 · teal medio #2E7980 · verde éxito #43B754 · fondo #F8F8F8
+   Series de gráficos: paleta categórica validada (CVD / contraste) en claro y oscuro, abre con teal y naranja. */
+:root {
+  color-scheme: light;
+  --page: #F8F8F8; --surface: #ffffff; --surface-2: #f1f4f4;
+  --ink: #0f1a1b; --ink-2: #4a5859; --muted: #7b8788;
+  --grid: #e2e8e8; --axis: #c2cccd; --border: rgba(0,78,85,0.13);
+  --accent: #2E7980; --accent-ink: #ffffff; --accent-wash: rgba(46,121,128,0.10);
+  --cta: #E8650A; --cta-ink: #ffffff; --orange: #FF740E;
+  --header-bg: #004E55; --header-ink: #ffffff; --header-ink-2: rgba(255,255,255,0.74);
+  --gap-band: rgba(208,59,59,0.10);
+  --good: #2b8a3e; --good-fill: #43B754; --warn: #a35a00; --bad: #c0392b; --info: #2E7980;
+  --input-fill: #fff3d6;
+  --s1:#008f9a; --s2:#FF740E; --s3:#4a3aa7; --s4:#eda100; --s5:#e87ba4; --s6:#2a78d6; --s7:#e34948; --s8:#008300; --s-otros:#8a9493;
+  --radius: 10px;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --page: #0b1112; --surface: #141b1c; --surface-2: #1c2526;
+    --ink: #ffffff; --ink-2: #c3cbca; --muted: #8a9493;
+    --grid: #263031; --axis: #344041; --border: rgba(255,255,255,0.10);
+    --accent: #4fb0b8; --accent-ink: #0b1112; --accent-wash: rgba(79,176,184,0.16);
+    --cta: #ff7f24; --cta-ink: #1a0e05;
+    --header-bg: #00363b;
+    --gap-band: rgba(230,103,103,0.14);
+    --good: #43B754; --good-fill: #43B754; --warn: #fab219; --bad: #e66767; --info: #4fb0b8;
+    --input-fill: #3d3414;
+    --s1:#0f9aa4; --s2:#e8661a; --s3:#9085e9; --s4:#c98500; --s5:#d55181; --s6:#3987e5; --s7:#e66767; --s8:#008300;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0b1112; --surface: #141b1c; --surface-2: #1c2526;
+  --ink: #ffffff; --ink-2: #c3cbca; --muted: #8a9493;
+  --grid: #263031; --axis: #344041; --border: rgba(255,255,255,0.10);
+  --accent: #4fb0b8; --accent-ink: #0b1112; --accent-wash: rgba(79,176,184,0.16);
+  --cta: #ff7f24; --cta-ink: #1a0e05;
+  --header-bg: #00363b;
+  --gap-band: rgba(230,103,103,0.14);
+  --good: #43B754; --good-fill: #43B754; --warn: #fab219; --bad: #e66767; --info: #4fb0b8;
+  --input-fill: #3d3414;
+  --s1:#0f9aa4; --s2:#e8661a; --s3:#9085e9; --s4:#c98500; --s5:#d55181; --s6:#3987e5; --s7:#e66767; --s8:#008300;
+}
+
+/* ===================== Base ===================== */
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--page); color: var(--ink); font: 14px/1.45 var(--font); -webkit-font-smoothing: antialiased; }
+button, input, select { font: inherit; color: inherit; }
+.hidden { display: none !important; }
+.num { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.muted { color: var(--muted); }
+.ink2 { color: var(--ink-2); }
+a { color: var(--accent); }
+
+/* ===================== Login ===================== */
+#login { min-height: 100vh; display: grid; place-items: center; padding: 16px; }
+.login-card { width: 100%; max-width: 360px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 28px; }
+.login-card { border-top: 4px solid var(--orange); }
+.login-card h1 { font-size: 20px; margin: 0 0 4px; color: var(--accent); }
+.login-card p { margin: 0 0 20px; color: var(--ink-2); }
+.field { display: grid; gap: 4px; margin-bottom: 12px; }
+.field label { font-size: 12px; color: var(--ink-2); font-weight: 600; }
+.field input { width: 100%; padding: 9px 11px; border-radius: 8px; border: 1px solid var(--axis); background: var(--surface); }
+.field input:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--axis); background: var(--surface); cursor: pointer; font-weight: 600; white-space: nowrap; }
+.btn:hover { background: var(--surface-2); }
+.btn.primary { background: var(--cta); color: var(--cta-ink); border-color: var(--cta); }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.ghost { border-color: transparent; background: transparent; }
+.btn.ghost:hover { background: var(--surface-2); }
+.btn.sm { padding: 5px 10px; font-size: 13px; }
+.btn:disabled { opacity: .5; cursor: default; }
+.err { color: var(--bad); font-size: 13px; min-height: 18px; margin-top: 8px; }
+
+/* ===================== App shell ===================== */
+header.top { position: sticky; top: 0; z-index: 20; background: var(--surface); border-bottom: 1px solid var(--border); }
+.top-band { background: var(--header-bg); color: var(--header-ink); border-bottom: 3px solid var(--orange); }
+.top-row { max-width: 1280px; margin: 0 auto; padding: 8px 16px; display: flex; align-items: center; gap: 16px; }
+.brand { white-space: nowrap; line-height: 1.2; }
+.brand b { font-size: 15px; display: block; }
+.brand small { font-size: 11px; color: var(--header-ink-2); }
+nav.tabs { display: flex; gap: 2px; overflow-x: auto; }
+nav.tabs button { border: 0; background: transparent; padding: 8px 12px; border-radius: 8px; cursor: pointer; color: var(--header-ink-2); font-weight: 600; white-space: nowrap; }
+nav.tabs button:hover { background: rgba(255,255,255,0.10); color: var(--header-ink); }
+nav.tabs button[aria-selected="true"] { background: rgba(255,255,255,0.16); color: var(--header-ink); box-shadow: inset 0 -2px 0 var(--orange); }
+.top-right { margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--header-ink-2); white-space: nowrap; }
+.btn.hdr { background: transparent; color: var(--header-ink); border-color: rgba(255,255,255,0.35); }
+.btn.hdr:hover { background: rgba(255,255,255,0.12); }
+@media (max-width: 1400px) { .top-row { flex-wrap: wrap; row-gap: 4px; } nav.tabs { order: 3; width: 100%; } }
+
+.filters { max-width: 1280px; margin: 0 auto; padding: 8px 16px 10px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.fgroup { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.flabel { font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
+.seg { display: inline-flex; border: 1px solid var(--axis); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; background: var(--surface); padding: 5px 10px; cursor: pointer; font-size: 13px; color: var(--ink-2); border-right: 1px solid var(--axis); }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.filters input[type="date"], .filters select { padding: 4px 8px; border-radius: 8px; border: 1px solid var(--axis); background: var(--surface); font-size: 13px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 4px 3px 8px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface-2); font-size: 13px; max-width: 360px; }
+td.skucol { min-width: 240px; }
+thead th.wrap { white-space: normal; min-width: 110px; max-width: 200px; }
+.chip .dot { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.chip .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip button { border: 0; background: transparent; cursor: pointer; color: var(--muted); padding: 0 4px; font-size: 15px; line-height: 1; border-radius: 50%; }
+.chip button:hover { color: var(--ink); }
+.picker { position: relative; }
+.picker input { width: 220px; padding: 5px 10px; border-radius: 8px; border: 1px solid var(--axis); background: var(--surface); font-size: 13px; }
+.picker-list { position: absolute; top: calc(100% + 4px); left: 0; width: 520px; max-height: 420px !important; max-width: calc(100vw - 32px); background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.12); z-index: 30; max-height: 320px; overflow: auto; padding: 4px; }
+.pick-head { position: sticky; top: -4px; z-index: 1; display: flex; align-items: center; gap: 8px; padding: 6px 8px; margin: -4px -4px 4px; background: var(--surface); border-bottom: 1px solid var(--grid); font-size: 12px; }
+.pick-head > span { flex: 1; }
+.picker-list button.pick-opt { grid-template-columns: 18px 1fr auto; }
+.picker-list button.pick-opt.on { background: var(--accent-wash); }
+.picker-list button.pick-opt input { margin: 2px 0 0; width: 15px; height: 15px; accent-color: var(--accent); pointer-events: none; }
+.picker-list button.pick-opt { display: grid; gap: 8px; width: 100%; text-align: left; border: 0; background: transparent; padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 13px; align-items: start; }
+.picker-list button.pick-opt:hover, .picker-list button.pick-opt.act { background: var(--surface-2); }
+.picker-list button.pick-opt.on.act, .picker-list button.pick-opt.on:hover { background: var(--accent-wash); }
+.picker-list button.pick-dummy { display: grid; grid-template-columns: 1fr auto; gap: 8px; width: 100%; text-align: left; border: 0; background: transparent; padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+.picker-list button:hover, .picker-list button.act { background: var(--surface-2); }
+.picker-list .sku { font-weight: 700; display: block; }
+.picker-list .pk { min-width: 0; display: grid; }
+.picker-list .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); }
+
+main { max-width: 1280px; margin: 0 auto; padding: 16px; transition: opacity .15s; }
+main.loading { opacity: .5; pointer-events: none; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 16px; }
+.card h2 { font-size: 15px; margin: 0 0 2px; }
+.card .sub { font-size: 12px; color: var(--muted); margin: 0 0 12px; }
+.card-head { display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.card-head > div:first-child { flex: 1; min-width: 200px; }
+.card-head h2 { margin: 0 0 2px; }
+.card-head .sub { margin: 0; }
+
+/* Tiles */
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.tile { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; text-align: left; }
+button.tile { cursor: pointer; }
+button.tile:hover { border-color: var(--axis); }
+button.tile[aria-pressed="true"] { outline: 2px solid var(--accent); outline-offset: -1px; }
+.tile .k { font-size: 12px; color: var(--ink-2); font-weight: 600; display: flex; gap: 6px; align-items: center; }
+.tile .v { font-size: 26px; font-weight: 650; margin-top: 2px; line-height: 1.15; }
+.tile .d { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+/* Status tags (icono + texto, nunca solo color) */
+.tag { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.tag.bad { color: var(--bad); } .tag.warn { color: var(--warn); } .tag.good { color: var(--good); } .tag.neutral { color: var(--muted); }
+.tag svg { width: 12px; height: 12px; }
+
+/* Tables */
+.tbl-wrap { overflow: auto; max-height: 70vh; border: 1px solid var(--border); border-radius: 8px; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { padding: 6px 10px; border-bottom: 1px solid var(--grid); }
+td:first-child { white-space: nowrap; }
+thead th { position: sticky; top: 0; background: var(--surface-2); font-size: 12px; color: var(--ink-2); text-align: left; font-weight: 650; z-index: 1; white-space: nowrap; }
+thead th.num { text-align: right; }
+th.sortable { cursor: pointer; user-select: none; }
+th.sortable:hover { color: var(--ink); }
+tbody tr:hover { background: var(--surface-2); }
+tfoot td { font-weight: 700; border-top: 1px solid var(--axis); background: var(--surface-2); position: sticky; bottom: 0; }
+td.nm { max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+tr.gap td { background: var(--gap-band); }
+tr.sel td { background: var(--accent-wash); }
+td input[type="checkbox"], th input[type="checkbox"] { width: 15px; height: 15px; cursor: pointer; accent-color: var(--accent); }
+
+/* Resumen */
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 860px) { .grid2 { grid-template-columns: 1fr; } }
+.kv { display: grid; grid-template-columns: 1fr auto; gap: 0; }
+.kv > div { padding: 6px 0; border-bottom: 1px solid var(--grid); }
+.kv > .k { color: var(--ink-2); padding-right: 12px; }
+.kv > .v { text-align: right; font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.kv .ind { padding-left: 14px; font-weight: 500 !important; }
+.kv input { width: 100px; text-align: right; padding: 4px 8px; border: 1px solid var(--axis); border-radius: 6px; background: var(--input-fill); font-weight: 650; }
+.kv .hint { grid-column: 1 / -1; font-size: 12px; color: var(--muted); border-bottom: 0; padding: 0 0 6px; text-align: left !important; font-weight: 400 !important; }
+.verdict { margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: var(--surface-2); display: flex; gap: 8px; align-items: center; font-weight: 650; }
+ul.insights { margin: 0; padding: 0; list-style: none; }
+ul.insights li { display: grid; grid-template-columns: 18px 1fr; align-items: baseline; }
+ul.insights li { margin-bottom: 8px; }
+ul.defs { margin: 0; padding-left: 18px; color: var(--ink-2); font-size: 13px; }
+
+/* Chart */
+.chart { position: relative; width: 100%; }
+.chart svg { display: block; width: 100%; overflow: visible; }
+.chart text { font-size: 11px; fill: var(--muted); font-variant-numeric: tabular-nums; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--ink-2); margin-bottom: 8px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+#tt { position: fixed; z-index: 50; pointer-events: none; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,.15); padding: 8px 10px; font-size: 12px; min-width: 150px; }
+#tt .h { color: var(--ink-2); font-weight: 600; margin-bottom: 4px; }
+#tt .r { display: grid; grid-template-columns: 12px auto 1fr; gap: 6px; align-items: center; }
+#tt .r i { height: 2px; border-radius: 1px; }
+#tt .r b { font-variant-numeric: tabular-nums; }
+#tt .r span { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
+#tt .tot { border-top: 1px solid var(--grid); margin-top: 4px; padding-top: 4px; }
+
+.drop { border: 2px dashed var(--axis); border-radius: 10px; padding: 26px 16px; display: grid; gap: 4px; justify-items: center; text-align: center; cursor: pointer; background: var(--surface-2); }
+.drop:hover, .drop.over, .drop:focus-visible { border-color: var(--accent); background: var(--accent-wash); outline: none; }
+ul.upl { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 6px; font-size: 13px; }
+ul.upl li { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.q { display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--axis); background: var(--surface); color: var(--ink-2); font-size: 10px; font-weight: 700; line-height: 1; padding: 0; margin-left: 5px; cursor: pointer; vertical-align: middle; flex: none; }
+.q:hover, .q[aria-expanded="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+thead th .q { margin-left: 4px; }
+#pop { position: fixed; z-index: 70; max-width: 300px; background: var(--surface); color: var(--ink); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.16); padding: 10px 12px; font-size: 12.5px; line-height: 1.45; font-weight: 400; text-transform: none; letter-spacing: 0; }
+dialog.modal { border: 0; border-radius: 12px; padding: 0; width: calc(100% - 32px); max-width: 720px; background: var(--surface); color: var(--ink); box-shadow: 0 20px 60px rgba(0,0,0,.3); }
+dialog.modal::backdrop { background: rgba(0,0,0,.45); }
+.modal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; background: var(--header-bg); color: var(--header-ink); border-bottom: 3px solid var(--orange); }
+.modal-head h2 { margin: 0; font-size: 16px; }
+.modal-head .btn { color: var(--header-ink); }
+.modal-body { padding: 16px 18px; max-height: 70vh; overflow: auto; }
+.modal-body h3 { font-size: 14px; margin: 16px 0 6px; color: var(--accent); }
+.modal-body section:first-of-type h3 { margin-top: 4px; }
+.modal-body p { margin: 0 0 6px; }
+.modal-foot { padding: 10px 18px; border-top: 1px solid var(--grid); display: flex; justify-content: flex-end; }
+.tkform { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
+.tkform .field { display: grid; gap: 4px; margin: 0; }
+.tkform .field > span { font-size: 12px; color: var(--ink-2); font-weight: 600; }
+.tkform .full { grid-column: 1 / -1; }
+.tkform label.chk { display: flex; gap: 8px; align-items: center; }
+.tkform label.chk input { width: auto; flex: none; }
+.tkform .chk > span { font-weight: 400; }
+.tkform input[type=text], .tkform select, .tkform textarea, .modal-body textarea { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--axis); background: var(--surface); font: inherit; color: inherit; }
+@media (max-width: 720px) { .tkform { grid-template-columns: 1fr; } }
+.thumbs { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.thumb { position: relative; width: 96px; height: 72px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); display: block; }
+.thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.thumb button { position: absolute; top: 2px; right: 2px; border: 0; border-radius: 50%; width: 20px; height: 20px; background: rgba(0,0,0,.6); color: #fff; cursor: pointer; line-height: 1; }
+ul.hist { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; font-size: 13px; }
+ul.hist li { border-left: 3px solid var(--accent); padding: 2px 0 2px 10px; }
+.pre { white-space: pre-wrap; background: var(--surface-2); border-radius: 8px; padding: 8px 10px; font-size: 13px; }
+.okmsg { color: var(--good); font-weight: 600; }
+tr.clic { cursor: pointer; }
+.gestion { border-top: 1px solid var(--grid); margin-top: 14px; }
+.empty { text-align: center; padding: 48px 16px; color: var(--ink-2); }
+.empty h3 { color: var(--ink); margin: 0 0 6px; }
+.toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.toolbar input[type="search"] { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--axis); background: var(--surface); width: 260px; max-width: 100%; }
+.banner { padding: 10px 12px; border-radius: 8px; background: var(--surface-2); color: var(--ink-2); font-size: 13px; margin-bottom: 12px; }
+
+@media (max-width: 720px) {
+  header.top { position: static; }
+  .top-row { flex-wrap: wrap; gap: 8px; }
+  .top-right { margin-left: 0; width: 100%; justify-content: space-between; }
+  nav.tabs { order: 3; width: 100%; }
+  #btnAyuda .lbl { display: none; }
+  .picker input { width: 100%; }
+  .tile .v { font-size: 22px; }
+}
+@media print { header.top { position: static; } .btn, .picker { display: none !important; } }
+</style>
+</head>
+<body>
+
+<!-- ===================== LOGIN ===================== -->
+<section id="login" class="hidden">
+  <form class="login-card" id="loginForm" autocomplete="on">
+    <h1>Rotación de ventas</h1>
+    <p>Gráfica Límite · ingresá con tu usuario</p>
+    <div class="field"><label for="lEmail">Email</label><input id="lEmail" type="email" autocomplete="username" required></div>
+    <div class="field"><label for="lPass">Contraseña</label><input id="lPass" type="password" autocomplete="current-password" required></div>
+    <button class="btn primary" type="submit" style="width:100%;justify-content:center;margin-top:4px" id="lBtn">Ingresar</button>
+    <div class="err" id="lErr"></div>
+  </form>
+</section>
+
+<!-- ===================== APP ===================== -->
+<section id="app" class="hidden">
+  <header class="top">
+    <div class="top-band"><div class="top-row">
+      <div class="brand"><b>📈 Rotación de ventas — Gráfica Límite</b><small><span id="versionTxt">versión —</span> · <span id="freshness"></span></small></div>
+      <nav class="tabs" role="tablist" id="tabs">
+        <button role="tab" data-tab="inicio">Inicio</button>
+        <button role="tab" data-tab="resumen">Resumen</button>
+        <button role="tab" data-tab="mensual">Mensual</button>
+        <button role="tab" data-tab="diario">Diario</button>
+        <button role="tab" data-tab="datos">Datos</button>
+        <button role="tab" data-tab="tickets">🎫 Tickets</button>
+      </nav>
+      <div class="top-right">
+        <button class="btn sm hdr" id="btnAyuda" type="button">ℹ️ <span class="lbl">Funcionamiento de la app</span></button>
+        <button class="btn sm hdr" id="btnExport" title="Descargar Resumen, Mensual y Diario en Excel">Excel ↓</button>
+        <button class="btn sm hdr" id="btnLogout">Salir</button>
+      </div>
+    </div></div>
+    <div class="filters" id="filters">
+      <div class="fgroup">
+        <span class="flabel">SKUs</span>
+        <div class="chips" id="chips"></div>
+        <div class="picker">
+          <input id="pickInput" type="search" placeholder="Agregar SKU (número o nombre)…" autocomplete="off" aria-label="Agregar SKU">
+          <div class="picker-list hidden" id="pickList" role="listbox"></div>
+        </div>
+        <button class="btn sm ghost hidden" id="btnClear">Limpiar</button>
+      </div>
+      <div class="fgroup">
+        <span class="flabel">Período</span>
+        <div class="seg" id="segPeriodo">
+          <button data-p="90d">90 d</button><button data-p="6m">6 m</button><button data-p="12m">12 m</button><button data-p="todo">Todo</button><button data-p="custom">Rango</button>
+        </div>
+        <span id="customRange" class="fgroup hidden">
+          <input type="date" id="fDesde" aria-label="Desde"> <span class="muted">a</span> <input type="date" id="fHasta" aria-label="Hasta">
+        </span>
+      </div>
+      <div class="fgroup">
+        <span class="flabel">Canal</span>
+        <select id="fCanal" aria-label="Canal">
+          <option value="todos">Todos</option>
+          <option value="mercadolibre">Mercado Libre</option>
+          <option value="tienda_online">Tienda online</option>
+        </select>
+      </div>
+    </div>
+  </header>
+  <main id="main"></main>
+</section>
+
+<div id="tt" class="hidden"></div>
+<div id="pop" class="hidden" role="tooltip"></div>
+
+<script>
+/* =====================================================================
+   Configuración: proyecto Supabase de Gráfica Límite.
+   La key publicable es pública por diseño: los datos están protegidos por
+   login + permiso (app_usuarios: es_admin o permisos.ver_rotacion = true).
+   ===================================================================== */
+const SUPABASE_URL = "https://mdupatknzanlxuwbcost.supabase.co";
+const SUPABASE_KEY = "sb_publishable_xfBKHMueEurDtbpjO8cpwQ_WzCke0JP";
+const TZ = "America/Argentina/Buenos_Aires";
+const NO_VALIDAS_TXT = "canceladas, devueltas, no entregadas y pagos pendientes/fallidos";
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
+
+/* ===================== Utilidades ===================== */
+const $ = (s, r = document) => r.querySelector(s);
+function h(tag, attrs = {}, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v === null || v === undefined || v === false) continue;
+    if (k === "class") el.className = v;
+    else if (k === "style") el.style.cssText = v;
+    else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else if (k === "text") el.textContent = v;
+    else el.setAttribute(k, v === true ? "" : v);
+  }
+  for (const c of kids.flat()) if (c !== null && c !== undefined && c !== false) el.append(c instanceof Node ? c : document.createTextNode(String(c)));
+  return el;
+}
+const SVGNS = "http://www.w3.org/2000/svg";
+function s(tag, attrs = {}) { const el = document.createElementNS(SVGNS, tag); for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v); return el; }
+
+const nf0 = new Intl.NumberFormat("es-AR", { maximumFractionDigits: 0 });
+const nf1 = new Intl.NumberFormat("es-AR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const nf2 = new Intl.NumberFormat("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fN = (v) => (v ? nf0.format(v) : "–");
+const fN2 = (v) => (v ? nf2.format(v) : "–");
+const fM = (v) => (v ? "$ " + nf0.format(v) : "–");
+const fP = (v) => (v === null || v === undefined || !isFinite(v) ? "–" : nf1.format(v * 100) + " %");
+const fPs = (v) => (v === null || v === undefined || !isFinite(v) ? "–" : (v > 0 ? "+" : "") + nf0.format(v * 100) + " %");
+
+// Fechas como 'YYYY-MM-DD' y número de día (UTC)
+const dn = (iso) => Math.floor(Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10)) / 864e5);
+const iso = (n) => new Date(n * 864e5).toISOString().slice(0, 10);
+const hoyAR = () => new Intl.DateTimeFormat("en-CA", { timeZone: TZ }).format(new Date());
+const fD = (s) => (s ? `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(2, 4)}` : "–");
+const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+const fMes = (ym) => `${MESES[+ym.slice(5, 7) - 1]}-${ym.slice(2, 4)}`;
+const DIAS_SEM = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
+const diaSem = (s) => DIAS_SEM[new Date(dn(s) * 864e5).getUTCDay()];
+
+const ICON = {
+  down: '<svg viewBox="0 0 12 12"><path d="M6 10 1.5 4h9z" fill="currentColor"/></svg>',
+  up: '<svg viewBox="0 0 12 12"><path d="M6 2l4.5 6h-9z" fill="currentColor"/></svg>',
+  stop: '<svg viewBox="0 0 12 12"><rect x="2" y="2" width="8" height="8" rx="1.5" fill="currentColor"/></svg>',
+  ok: '<svg viewBox="0 0 12 12"><circle cx="6" cy="6" r="4" fill="currentColor"/></svg>',
+  off: '<svg viewBox="0 0 12 12"><circle cx="6" cy="6" r="3.6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>',
+};
+function tag(kind, cls, label) { const t = h("span", { class: "tag " + cls }); t.innerHTML = ICON[kind]; t.append(document.createTextNode(label)); return t; }
+
+/* ===================== Config de la app (un solo lugar para tocar) ===================== */
+const APP = { id: "grafica-rotacion", nombre: "Rotación de ventas", version: "2026-10-02.2" };
+const UMBRALES = {
+  frenadoDias: 14,   // días sin vender (habiendo vendido en 90 d) para marcar "Frenado"
+  caida: -0.30,      // velocidad 30 d vs 90 d para "En caída"
+  alza: 0.30,        // velocidad 30 d vs 90 d para "En alza"
+  minUnid90: 10,     // mínimo de unidades en 90 d para opinar de tendencia
+  rachaDias: 3,      // días seguidos sin venta para marcar un "corte"
+};
+const TICKETS_BUCKET = "tickets-capturas";
+const MAX_CAPTURAS = 3, MAX_CAPTURA_MB = 5;
+
+/* ===================== Registro de errores (va al contexto de los tickets) ===================== */
+const erroresRecientes = [];
+function registrarError(origen, e) {
+  const msg = (e && (e.message || e.reason?.message || e.reason)) || String(e);
+  erroresRecientes.push({ t: new Date().toISOString(), origen, msg: String(msg).slice(0, 300) });
+  if (erroresRecientes.length > 10) erroresRecientes.shift();
+}
+addEventListener("error", (e) => registrarError("window", e.error || e.message));
+addEventListener("unhandledrejection", (e) => registrarError("promesa", e.reason));
+
+/* ===================== Ayuda "?" en cada KPI ===================== */
+const AYUDA = {
+  "SKUs con venta (90 d)": "Cantidad de SKUs que tuvieron al menos una venta válida en los últimos 90 días. Tocalo para ver solo esos en el ranking.",
+  "Frenados": `SKUs que vendieron en los últimos 90 días pero llevan ${UMBRALES.frenadoDias} días o más sin vender. Primera sospecha: falta de stock o publicación pausada. Lo revisa Stock.`,
+  "En caída": `SKUs que en los últimos 30 días venden a un ritmo ${Math.abs(UMBRALES.caida * 100)} % o más por debajo de su promedio de 90 días (con al menos ${UMBRALES.minUnid90} unidades en 90 d).`,
+  "En alza": `SKUs que en los últimos 30 días venden a un ritmo ${UMBRALES.alza * 100} % o más por encima de su promedio de 90 días (con al menos ${UMBRALES.minUnid90} unidades en 90 d). Ojo con quedarse sin stock.`,
+  "Unid. 30 d": "Unidades vendidas (válidas) en los últimos 30 días, contando hoy.",
+  "Unid./día 30 d": "Velocidad de venta: unidades de los últimos 30 días ÷ 30.",
+  "Unid. 90 d": "Unidades vendidas (válidas) en los últimos 90 días.",
+  "Tendencia": "Cuánto más rápido (+) o más lento (−) vende en los últimos 30 días contra su promedio de 90 días. Se muestra solo si vendió 10+ unidades en 90 días.",
+  "Días c/venta 90 d": "En cuántos de los últimos 90 días hubo al menos una venta. Cuanto más alto, más pareja es la demanda.",
+  "Última venta": "Fecha de la última venta válida y, entre paréntesis, hace cuántos días fue.",
+  "Estado": "Clasificación automática: Frenado, En caída, En alza, Estable o Sin ventas 90 d (ver los recuadros de arriba).",
+  "Período": "Rango de fechas analizado. Arranca en la primera venta del SKU (no antes) y termina en el corte elegido.",
+  "Unidades vendidas": "Unidades de ventas válidas en el período. Válida = no cancelada, no devuelta, no 'no entregada' y con pago acreditado.",
+  "Ventas (órdenes)": "Cantidad de órdenes válidas en el período. Una orden puede llevar varias unidades.",
+  "Unidades por venta": "Unidades ÷ ventas. Si es mayor a 1, hay compradores que se llevan de a varios.",
+  "Unidades no válidas": "Unidades de órdenes canceladas, devueltas, no entregadas o con pago pendiente/fallido. No cuentan para la rotación.",
+  "Ingreso bruto": "Precio × unidades de las ventas válidas, en pesos de cada momento (sin ajustar por inflación).",
+  "Precio promedio": "Ingreso bruto ÷ unidades vendidas. Montos nominales: no compares meses lejanos sin ajustar por inflación.",
+  "Cargos ML sobre ingreso ML": "Cargos por venta que descuenta Mercado Libre ÷ ingreso de las ventas de ML (sin envío). La tienda no tiene cargos de ML.",
+  "Unid./día · últimos 30 días": "Unidades de los últimos 30 días hasta el corte ÷ 30. Usa toda la historia, no depende del período elegido.",
+  "Unid./día · últimos 60 días": "Unidades de los últimos 60 días hasta el corte ÷ 60.",
+  "Unid./día · últimos 90 días": "Unidades de los últimos 90 días hasta el corte ÷ 90.",
+  "Proyección mensual (vel. 30 d × 30)": "Cuánto vendería en un mes si sigue al ritmo de los últimos 30 días.",
+  "Días sin venta en los últimos 90": "Días sin ninguna venta en los últimos 90 hasta el corte (sin contar los días antes de que existiera el SKU).",
+  "Racha más larga sin ventas (período)": "La mayor cantidad de días seguidos sin vender dentro del período. Rachas largas suelen ser quiebres de stock.",
+  "Stock actual (unidades)": "Lo cargás vos: stock físico de hoy. Se guarda solo en este navegador.",
+  "Lead time del proveedor (días)": "Lo cargás vos: días desde que hacés el pedido hasta que la mercadería está en el depósito.",
+  "Stock de seguridad (días)": "Lo cargás vos: días extra de colchón para cubrir picos de demanda o demoras del proveedor.",
+  "Días a cubrir con el pedido": "Lo cargás vos: cuántos días de venta querés comprar en cada pedido.",
+  "Punto de pedido (unidades)": "Velocidad 30 d × (lead time + stock de seguridad). Cuando el stock baja de este número, hay que pedir.",
+  "Cobertura actual": "Stock actual ÷ velocidad 30 d: para cuántos días te alcanza el stock al ritmo actual.",
+  "Quiebre estimado": "Fecha en la que te quedarías sin stock si sigue vendiendo al ritmo de los últimos 30 días.",
+  "Pedido sugerido (unidades)": "Velocidad 30 d × (lead time + seguridad + días a cubrir) − stock actual.",
+  "Ventas": "Cantidad de órdenes válidas. Una orden puede llevar varias unidades.",
+  "Unid./venta": "Unidades ÷ ventas del mes.",
+  "No válidas": "Unidades canceladas, devueltas, no entregadas o con pago pendiente/fallido.",
+  "% no válidas": "No válidas ÷ (válidas + no válidas).",
+  "Días con venta": "Días del mes con al menos una venta válida.",
+  "Días del período": "Días del mes que entran en el período analizado.",
+  "Unid./día": "Unidades del mes ÷ días del período.",
+  "Precio prom.": "Ingreso bruto ÷ unidades.",
+  "Cargos ML %": "Cargos de Mercado Libre ÷ ingreso de las ventas de ML.",
+  "Unid. total": "Unidades válidas sumando todos los SKUs elegidos.",
+  "Cargos ML": "Cargos por venta que descuenta Mercado Libre (sin envío).",
+  "Ingreso neto": "Ingreso bruto − cargos de ML.",
+  "Días seguidos sin venta": "Contador de días sin vender. Las filas rojas son rachas de 3 días o más.",
+};
+function ayuda(texto) {
+  if (!texto) return null;
+  const b = h("button", { class: "q", type: "button", "aria-label": "¿Qué es esto?", "aria-expanded": "false", text: "?" });
+  b.addEventListener("click", (e) => { e.stopPropagation(); e.preventDefault(); abrirAyuda(b, texto); });
+  return b;
+}
+/** Etiqueta + "?" si hay ayuda definida para ese texto. */
+const conAyuda = (txt) => [txt, ayuda(AYUDA[txt])];
+let popAbierto = null;
+function cerrarAyuda() { const p = $("#pop"); if (p) p.classList.add("hidden"); if (popAbierto) popAbierto.setAttribute("aria-expanded", "false"); popAbierto = null; }
+function abrirAyuda(btn, texto) {
+  const p = $("#pop");
+  if (popAbierto === btn) { cerrarAyuda(); return; }
+  cerrarAyuda();
+  p.textContent = texto; p.classList.remove("hidden");
+  const r = btn.getBoundingClientRect(), pr = p.getBoundingClientRect();
+  let left = Math.min(innerWidth - pr.width - 8, Math.max(8, r.left + r.width / 2 - pr.width / 2));
+  let top = r.bottom + 6; if (top + pr.height > innerHeight - 8) top = r.top - pr.height - 6;
+  p.style.left = left + "px"; p.style.top = top + "px";
+  btn.setAttribute("aria-expanded", "true"); popAbierto = btn;
+}
+document.addEventListener("click", (e) => { if (popAbierto && !e.target.closest("#pop")) cerrarAyuda(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") cerrarAyuda(); });
+addEventListener("scroll", cerrarAyuda, true);
+
+/* ===================== Modales ===================== */
+function abrirModal(titulo, cuerpo, ancho) {
+  const d = h("dialog", { class: "modal", style: ancho ? `max-width:${ancho}px` : null },
+    h("div", { class: "modal-head" }, h("h2", { text: titulo }), h("button", { class: "btn sm ghost", type: "button", "aria-label": "Cerrar", text: "✕", onclick: () => d.close() })),
+    h("div", { class: "modal-body" }, cuerpo),
+    h("div", { class: "modal-foot" }, h("button", { class: "btn", type: "button", text: "Cerrar", onclick: () => d.close() })));
+  d.addEventListener("close", () => d.remove());
+  d.addEventListener("click", (e) => { if (e.target === d) d.close(); });
+  document.body.append(d); d.showModal();
+  return d;
+}
+
+/* ===================== Estado ===================== */
+const SLOTS = 8;
+const state = {
+  catalogo: [], catMap: new Map(),
+  pres: [], presMap: new Map(), presPorBase: new Map(), // presentaciones (sku_codigo)
+  puedeImportar: false,
+  seleccion: [], colorDe: new Map(),
+  periodo: "12m", desde: null, hasta: null, canal: "todos",
+  tab: "inicio",
+  home: { filtro: "activos", q: "", orden: { col: "unid_30", dir: -1 } },
+  cache: new Map(), // sku_base -> filas diarias
+};
+
+function colorSku(sku) {
+  if (!state.colorDe.has(sku)) {
+    const usados = new Set([...state.colorDe.entries()].filter(([k]) => state.seleccion.includes(k)).map(([, v]) => v));
+    let slot = 0; while (usados.has(slot) && slot < SLOTS) slot++;
+    state.colorDe.set(sku, slot < SLOTS ? slot : -1);
+  }
+  const slot = state.colorDe.get(sku);
+  return slot >= 0 ? `var(--s${slot + 1})` : "var(--s-otros)";
+}
+const escRe = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+// SKU = el campo SKU completo, tal cual (ej. "208 A - T DYE Global-250ml - AMARILLO").
+const codeOf = (k) => k;
+const esBase = (k) => state.catMap.has(k);
+const baseDe = (k) => k;
+/** Título de la publicación (ML) o nombre del producto (tienda), como dato secundario. */
+function nombreSku(sku) { const c = state.catMap.get(sku); return (c && c.titulo) || ""; }
+function etiquetaSku(k) { return k; }
+function presentacionesDe() { return []; }
+
+/* ===================== URL (compartible) ===================== */
+function leerHash() {
+  const p = new URLSearchParams(location.hash.slice(1));
+  if (p.get("tab")) state.tab = p.get("tab");
+  if (p.get("skus")) state.seleccion = p.get("skus").split("|").filter(Boolean);
+  if (p.get("p")) state.periodo = p.get("p");
+  if (p.get("desde")) state.desde = p.get("desde");
+  if (p.get("hasta")) state.hasta = p.get("hasta");
+  if (p.get("canal")) state.canal = p.get("canal");
+}
+function escribirHash() {
+  const p = new URLSearchParams();
+  p.set("tab", state.tab);
+  if (state.seleccion.length) p.set("skus", state.seleccion.join("|"));
+  p.set("p", state.periodo);
+  if (state.periodo === "custom") { if (state.desde) p.set("desde", state.desde); if (state.hasta) p.set("hasta", state.hasta); }
+  if (state.canal !== "todos") p.set("canal", state.canal);
+  history.replaceState(null, "", "#" + p.toString());
+}
+
+/* ===================== Datos ===================== */
+const esErrorRed = (e) => !e || /fetch|network|timeout|502|503|504/i.test(`${e.message} ${e.code} ${e.status}`);
+const esSesionVencida = (e) => e && /jwt|PGRST301|PGRST303|401/i.test(`${e.message} ${e.code} ${e.status}`);
+/** Llama una RPC paginando de a 1000 filas; reintenta cortes de red y renueva la sesión si venció. */
+async function rpcTodo(fn, args) {
+  const out = [];
+  for (let from = 0; ; from += 1000) {
+    let data, error;
+    for (let intento = 0; intento < 3; intento++) {
+      ({ data, error } = await sb.rpc(fn, args).range(from, from + 999));
+      if (!error) break;
+      if (esSesionVencida(error) && intento === 0) { const r = await sb.auth.refreshSession(); if (r.error) { mostrarLogin(); throw new Error("La sesión venció: volvé a ingresar."); } continue; }
+      if (!esErrorRed(error)) break;
+      await new Promise((r) => setTimeout(r, 800 * (intento + 1)));
+    }
+    if (error) { registrarError("rpc " + fn, error); throw error; }
+    out.push(...data);
+    if (data.length < 1000) break;
+  }
+  return out;
+}
+async function cargarCatalogo() {
+  const [cat, est] = await Promise.all([rpcTodo("rot_catalogo", {}), sb.rpc("rot_estado")]);
+  const pres = [];
+  for (const c of cat) for (const k of ["unid_30", "unid_90", "unid_365", "unid_total"]) c[k] = Number(c[k]) || 0;
+  for (const p of pres) { p.unid_pub_90 = Number(p.unid_pub_90) || 0; p.unid_90 = Number(p.unid_90) || 0; }
+  state.catalogo = cat;
+  state.catMap = new Map(cat.map((c) => [c.sku_base, c]));
+  state.pres = pres;
+  state.presMap = new Map(pres.map((p) => [p.sku_codigo, p]));
+  state.presPorBase = new Map();
+  for (const p of pres) { if (!state.presPorBase.has(p.sku_base)) state.presPorBase.set(p.sku_base, []); state.presPorBase.get(p.sku_base).push(p); }
+  for (const l of state.presPorBase.values()) l.sort((a, b) => b.unid_90 - a.unid_90 || a.sku_codigo.localeCompare(b.sku_codigo));
+  const e = est.data && est.data[0];
+  if (e && e.actualizado) {
+    const t = new Date(e.actualizado);
+    $("#freshness").textContent = "Datos al " + t.toLocaleString("es-AR", { timeZone: TZ, day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  }
+}
+async function asegurarDatos(skus) {
+  const faltan = [...new Set(skus.map(baseDe))].filter((k) => !state.cache.has(k));
+  if (!faltan.length) return;
+  const filas = await rpcTodo("rot_diario_cod", { p_bases: faltan });
+  for (const k of faltan) state.cache.set(k, []);
+  for (const f of filas) {
+    if (!state.cache.has(f.sku_base)) state.cache.set(f.sku_base, []);
+    state.cache.get(f.sku_base).push({
+      fecha: f.fecha, base: f.sku_base, cod: f.sku_codigo, canal: f.canal,
+      uv: Number(f.unid_validas) || 0, unv: Number(f.unid_no_validas) || 0, upub: Number(f.unid_pub) || 0,
+      ing: Number(f.ingreso) || 0, car: Number(f.cargos) || 0, ven: f.ventas || 0,
+    });
+  }
+}
+/** Filas de la selección, cada una etiquetada con la clave seleccionada (base o presentación). */
+function filasSeleccion() {
+  const out = [];
+  for (const k of state.seleccion) {
+    const rows = state.cache.get(baseDe(k)) || [];
+    const cod = codeOf(k);
+    for (const f of rows) if (esBase(k) || f.cod === cod) out.push({ ...f, sku: k });
+  }
+  return state.canal === "todos" ? out : out.filter((f) => f.canal === state.canal);
+}
+
+/* ===================== Cálculo (misma lógica que el Excel) ===================== */
+function calcular() {
+  const skus = state.seleccion;
+  const filas = filasSeleccion();
+
+  const ayer = iso(dn(hoyAR()) - 1);
+  let fin = state.periodo === "custom" && state.hasta ? state.hasta : ayer;
+  const conVenta = filas.filter((f) => f.uv > 0);
+  const primeraVentaTotal = conVenta.length ? conVenta.reduce((m, f) => (f.fecha < m ? f.fecha : m), "9999") : null;
+  let desde;
+  const nFin = dn(fin);
+  if (state.periodo === "90d") desde = iso(nFin - 89);
+  else if (state.periodo === "6m") desde = iso(nFin - 182);
+  else if (state.periodo === "12m") desde = iso(nFin - 364);
+  else if (state.periodo === "custom" && state.desde) desde = state.desde;
+  else desde = primeraVentaTotal || fin;
+  // el calendario arranca con la primera venta (no antes) para no contar "huecos" previos al lanzamiento
+  if (primeraVentaTotal && primeraVentaTotal > desde) desde = primeraVentaTotal;
+  if (desde > fin) desde = fin;
+
+  const n0 = dn(desde), n1 = dn(fin), nd = n1 - n0 + 1;
+  // índice diario sobre TODA la historia (para velocidades) y luego se recorta al período
+  const porDia = new Map();
+  for (const f of filas) {
+    let d = porDia.get(f.fecha);
+    if (!d) { d = { uv: 0, unv: 0, ing: 0, ingML: 0, car: 0, ven: 0, porSku: {} }; porDia.set(f.fecha, d); }
+    d.uv += f.uv; d.unv += f.unv; d.ing += f.ing; d.car += f.car; d.ven += f.ven;
+    if (f.canal === "mercadolibre") d.ingML += f.ing;
+    d.porSku[f.sku] = (d.porSku[f.sku] || 0) + f.uv;
+  }
+
+  const dias = [];
+  let racha = 0;
+  for (let i = 0; i < nd; i++) {
+    const fecha = iso(n0 + i);
+    const d = porDia.get(fecha) || { uv: 0, unv: 0, ing: 0, ingML: 0, car: 0, ven: 0, porSku: {} };
+    racha = d.uv > 0 ? 0 : racha + 1;
+    dias.push({ fecha, mes: fecha.slice(0, 7), ...d, neto: d.ing - d.car, racha });
+  }
+  // marcar rachas >= 3 completas (todos los días de la racha, no solo desde el 3°)
+  const huecos = [];
+  for (let i = 0; i < dias.length; ) {
+    if (dias[i].uv === 0) {
+      let j = i; while (j < dias.length && dias[j].uv === 0) j++;
+      if (j - i >= UMBRALES.rachaDias) { huecos.push({ desde: dias[i].fecha, hasta: dias[j - 1].fecha, n: j - i, i0: i, i1: j - 1 }); for (let k = i; k < j; k++) dias[k].hueco = true; }
+      i = j;
+    } else i++;
+  }
+
+  // meses
+  const mesesMap = new Map();
+  for (const d of dias) {
+    let m = mesesMap.get(d.mes);
+    if (!m) { m = { mes: d.mes, uv: 0, unv: 0, ven: 0, ing: 0, ingML: 0, car: 0, diasVenta: 0, diasPer: 0, porSku: {} }; mesesMap.set(d.mes, m); }
+    m.ven += d.ven; m.uv += d.uv; m.unv += d.unv; m.ing += d.ing; m.ingML += d.ingML; m.car += d.car; m.diasPer++; if (d.uv > 0) m.diasVenta++;
+    for (const [k, v] of Object.entries(d.porSku)) m.porSku[k] = (m.porSku[k] || 0) + v;
+  }
+  const meses = [...mesesMap.values()];
+
+  // velocidades relativas al corte (usan historia completa, no solo el período)
+  const sumaVentana = (n) => { let t = 0; for (const [f, d] of porDia) { const x = dn(f); if (x > n1 - n && x <= n1) t += d.uv; } return t; };
+  const v30 = sumaVentana(30) / 30, v60 = sumaVentana(60) / 60, v90 = sumaVentana(90) / 90;
+  let sinVenta90 = 0; for (let x = n1 - 89; x <= n1; x++) { const d = porDia.get(iso(x)); if (!d || d.uv === 0) sinVenta90++; }
+  // si el SKU es más nuevo que 90 días, no contar días previos al lanzamiento
+  if (primeraVentaTotal && dn(primeraVentaTotal) > n1 - 89) sinVenta90 -= dn(primeraVentaTotal) - (n1 - 89);
+
+  const porSku = skus.map((k) => {
+    const fs = filas.filter((f) => f.sku === k);
+    const enPer = fs.filter((f) => f.fecha >= desde && f.fecha <= fin);
+    const ventas = fs.filter((f) => f.uv > 0 && f.fecha <= fin);
+    let u30 = 0; for (const f of fs) { const x = dn(f.fecha); if (x > n1 - 30 && x <= n1) u30 += f.uv; }
+    return {
+      sku: k, nombre: nombreSku(k),
+      uv: enPer.reduce((a, f) => a + f.uv, 0), unv: enPer.reduce((a, f) => a + f.unv, 0), ing: enPer.reduce((a, f) => a + f.ing, 0),
+      v30: u30 / 30,
+      primera: ventas.length ? ventas.reduce((m, f) => (f.fecha < m ? f.fecha : m), "9999") : null,
+      ultima: ventas.length ? ventas.reduce((m, f) => (f.fecha > m ? f.fecha : m), "0000") : null,
+    };
+  });
+
+  // desglose por presentación (dentro del período)
+  const pm = new Map();
+  for (const f of filas) {
+    if (f.fecha < desde || f.fecha > fin) continue;
+    let x = pm.get(f.cod);
+    if (!x) { x = { cod: f.cod, base: f.base, uv: 0, upub: 0, unv: 0, ing: 0, ultima: null, canales: new Set() }; pm.set(f.cod, x); }
+    x.uv += f.uv; x.upub += f.upub; x.unv += f.unv; x.ing += f.ing; x.canales.add(f.canal);
+    if (f.uv > 0 && (!x.ultima || f.fecha > x.ultima)) x.ultima = f.fecha;
+  }
+  const porPres = [...pm.values()].sort((a, b) => a.base.localeCompare(b.base, "es", { numeric: true }) || b.uv - a.uv);
+  const tot = dias.reduce((a, d) => ({ uv: a.uv + d.uv, unv: a.unv + d.unv, ven: a.ven + d.ven, ing: a.ing + d.ing, ingML: a.ingML + d.ingML, car: a.car + d.car }), { uv: 0, unv: 0, ven: 0, ing: 0, ingML: 0, car: 0 });
+  const ultimaVenta = porSku.reduce((m, p) => (p.ultima && p.ultima > m ? p.ultima : m), "");
+  return { desde, fin, dias, meses, huecos, tot, porPres, v30, v60, v90, sinVenta90, rachaMax: dias.reduce((m, d) => Math.max(m, d.racha), 0), porSku, ultimaVenta, hayDatos: filas.length > 0 };
+}
+
+/* ===================== Gráfico de barras apiladas (SVG) ===================== */
+function niceMax(v) {
+  const raw = v / 4, mag = Math.pow(10, Math.floor(Math.log10(raw || 1))), n = raw / mag;
+  const step = (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * mag;
+  return { max: step * 4, step };
+}
+function topPath(x, y, w, hh, r) {
+  r = Math.min(r, w / 2, hh);
+  return `M${x},${y + hh}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + hh}Z`;
+}
+function barChart(el, { labels, series, height = 260, xLabel, tipTitle, bands = [], bandLabel, ticks }) {
+  el.textContent = "";
+  const W = Math.max(320, el.clientWidth || 800), H = height;
+  const m = { t: 10, r: 8, b: 26, l: 46 };
+  const iw = W - m.l - m.r, ih = H - m.t - m.b, n = labels.length;
+  const totals = labels.map((_, i) => series.reduce((a, se) => a + (se.values[i] || 0), 0));
+  const { max, step } = niceMax(Math.max(1, ...totals));
+  const band = iw / Math.max(1, n);
+  const gap = band >= 8 ? 2 : band >= 4 ? 1 : 0;
+  const bw = Math.max(1, band - gap);
+  const y = (v) => m.t + ih - (v / max) * ih;
+  const svg = s("svg", { viewBox: `0 0 ${W} ${H}`, height: H, role: "img" });
+
+  for (const b of bands) svg.append(s("rect", { x: m.l + b.i0 * band, y: m.t, width: (b.i1 - b.i0 + 1) * band, height: ih, fill: "var(--gap-band)" }));
+  for (let v = 0; v <= max + 1e-9; v += step) {
+    svg.append(s("line", { x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), stroke: v === 0 ? "var(--axis)" : "var(--grid)", "stroke-width": 1 }));
+    const t = s("text", { x: m.l - 6, y: y(v) + 4, "text-anchor": "end" }); t.textContent = nf0.format(v); svg.append(t);
+  }
+  const stroke = bw >= 6;
+  for (let i = 0; i < n; i++) {
+    let acc = 0;
+    const x = m.l + i * band + gap / 2;
+    const vivos = series.filter((se) => (se.values[i] || 0) > 0);
+    vivos.forEach((se, j) => {
+      const v = se.values[i], y0 = y(acc), y1 = y(acc + v), hh = Math.max(0.5, y0 - y1);
+      const top = j === vivos.length - 1 && bw >= 8;
+      const el2 = top ? s("path", { d: topPath(x, y1, bw, hh, 3) }) : s("rect", { x, y: y1, width: bw, height: hh });
+      el2.setAttribute("fill", se.color);
+      if (stroke && j > 0) { el2.setAttribute("stroke", "var(--surface)"); el2.setAttribute("stroke-width", "1"); }
+      svg.append(el2);
+      acc += v;
+    });
+  }
+  // eje X: etiquetas espaciadas >= 56px
+  const every = Math.max(1, Math.ceil(56 / band));
+  let idx = [];
+  if (ticks) { let last = -Infinity; for (const i of ticks) if ((i - last) * band >= 48) { idx.push(i); last = i; } }
+  else for (let i = 0; i < n; i += every) idx.push(i);
+  for (const i of idx) {
+    const t = s("text", { x: m.l + i * band + band / 2, y: H - 8, "text-anchor": "middle" }); t.textContent = xLabel(labels[i], i); svg.append(t);
+  }
+  // capa de hover: la columna entera es el blanco
+  const hl = s("rect", { y: m.t, height: ih, fill: "var(--ink)", opacity: 0, "pointer-events": "none" });
+  svg.append(hl);
+  const hit = s("rect", { x: m.l, y: m.t, width: iw, height: ih, fill: "transparent", tabindex: 0, "aria-label": "Gráfico: pasá el mouse para ver valores" });
+  svg.append(hit);
+  const tt = $("#tt");
+  const show = (i, cx, cy) => {
+    hl.setAttribute("x", m.l + i * band); hl.setAttribute("width", band); hl.setAttribute("opacity", 0.06);
+    tt.textContent = "";
+    tt.append(h("div", { class: "h", text: tipTitle(labels[i], i) }));
+    for (const se of series) {
+      const v = se.values[i] || 0;
+      if (!v && series.length > 6) continue;
+      tt.append(h("div", { class: "r" }, h("i", { style: `background:${se.color}` }), h("b", { text: nf0.format(v) }), h("span", { text: se.name })));
+    }
+    if (series.length > 1) tt.append(h("div", { class: "r tot" }, h("i"), h("b", { text: nf0.format(totals[i]) }), h("span", { text: "Total" })));
+    const bnd = bands.find((b) => i >= b.i0 && i <= b.i1);
+    if (bnd && bandLabel) tt.append(h("div", { class: "tot muted", text: bandLabel(bnd) }));
+    tt.classList.remove("hidden");
+    const r = tt.getBoundingClientRect();
+    let left = cx + 14, top = cy - r.height - 10;
+    if (left + r.width > innerWidth - 8) left = cx - r.width - 14;
+    if (top < 8) top = cy + 14;
+    tt.style.left = left + "px"; tt.style.top = top + "px";
+  };
+  const hide = () => { hl.setAttribute("opacity", 0); tt.classList.add("hidden"); };
+  hit.addEventListener("pointermove", (e) => {
+    const p = svg.getBoundingClientRect(); const sx = W / p.width;
+    const i = Math.min(n - 1, Math.max(0, Math.floor(((e.clientX - p.left) * sx - m.l) / band)));
+    show(i, e.clientX, e.clientY);
+  });
+  hit.addEventListener("pointerleave", hide);
+  let fi = n - 1;
+  hit.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowLeft") fi = Math.max(0, fi - 1); else if (e.key === "ArrowRight") fi = Math.min(n - 1, fi + 1); else return;
+    e.preventDefault(); const p = svg.getBoundingClientRect();
+    show(fi, p.left + ((m.l + fi * band + band / 2) * p.width) / W, p.top + 40);
+  });
+  hit.addEventListener("blur", hide);
+  el.append(svg);
+}
+function seriesDe(r, getVal, len) {
+  // máximo 8 series; si hay más, los 7 de mayor volumen + "Otros"
+  let skus = [...state.seleccion];
+  let otros = [];
+  if (skus.length > SLOTS) {
+    const orden = [...r.porSku].sort((a, b) => b.uv - a.uv).map((p) => p.sku);
+    otros = orden.slice(SLOTS - 1); skus = state.seleccion.filter((k) => !otros.includes(k));
+  }
+  const out = skus.map((k) => ({ key: k, name: k, color: colorSku(k), values: Array.from({ length: len }, (_, i) => getVal(i, k)) }));
+  if (otros.length) out.push({ key: "otros", name: `Otros (${otros.length} SKUs)`, color: "var(--s-otros)", values: Array.from({ length: len }, (_, i) => otros.reduce((a, k) => a + getVal(i, k), 0)) });
+  return out;
+}
+function legend(series, extra) {
+  const l = h("div", { class: "legend" });
+  for (const se of series) l.append(h("span", {}, h("i", { style: `background:${se.color}` }), se.name));
+  if (extra) l.append(h("span", {}, h("i", { style: "background:var(--gap-band);outline:1px solid var(--bad)" }), extra));
+  return l;
+}
+
+/* ===================== Vistas ===================== */
+const main = () => $("#main");
+function vacio(titulo, texto, accion) {
+  return h("div", { class: "card empty" }, h("h3", { text: titulo }), h("p", { text: texto }), accion || null);
+}
+
+/* ---------- INICIO ---------- */
+function clasificar(c, hoy) {
+  const diasSin = c.ultima_venta ? hoy - dn(c.ultima_venta) : Infinity;
+  const v30 = c.unid_30 / 30, v90 = c.unid_90 / 90;
+  const tend = v90 > 0 ? v30 / v90 - 1 : null;
+  let estado = "activo";
+  if (c.unid_90 === 0) estado = "inactivo";
+  else if (diasSin >= UMBRALES.frenadoDias) estado = "frenado";
+  else if (c.unid_90 >= UMBRALES.minUnid90 && tend !== null && tend <= UMBRALES.caida) estado = "caida";
+  else if (c.unid_90 >= UMBRALES.minUnid90 && tend !== null && tend >= UMBRALES.alza) estado = "alza";
+  return { diasSin, v30, tend, estado };
+}
+const ESTADOS = {
+  frenado: () => tag("stop", "bad", "Frenado"),
+  caida: () => tag("down", "warn", "En caída"),
+  alza: () => tag("up", "good", "En alza"),
+  activo: () => tag("ok", "neutral", "Estable"),
+  inactivo: () => tag("off", "neutral", "Sin ventas 90 d"),
+};
+function vistaInicio() {
+  const hoy = dn(hoyAR());
+  const filas = state.catalogo.map((c) => ({ ...c, ...clasificar(c, hoy), nm: c.titulo || "" }));
+  const cnt = (e) => filas.filter((f) => f.estado === e).length;
+  const activos = filas.filter((f) => f.estado !== "inactivo").length;
+  const H = state.home;
+
+  const tile = (key, k, v, d, ic) => h("button", { class: "tile", "aria-pressed": String(H.filtro === key), onclick: () => { H.filtro = H.filtro === key ? "activos" : key; render(); } },
+    h("div", { class: "k" }, ic || null, k, ayuda(AYUDA[k])), h("div", { class: "v", text: nf0.format(v) }), h("div", { class: "d", text: d }));
+  const tiles = h("div", { class: "tiles" },
+    tile("activos", "SKUs con venta (90 d)", activos, `de ${nf0.format(filas.length)} SKUs con historia`),
+    tile("frenado", "Frenados", cnt("frenado"), `vendían y llevan ${UMBRALES.frenadoDias}+ días sin venta`, tag("stop", "bad", "")),
+    tile("caida", "En caída", cnt("caida"), `velocidad 30 d ≤ ${Math.round((1 + UMBRALES.caida) * 100)} % de la de 90 d`, tag("down", "warn", "")),
+    tile("alza", "En alza", cnt("alza"), `velocidad 30 d ≥ ${Math.round((1 + UMBRALES.alza) * 100)} % de la de 90 d`, tag("up", "good", "")),
+  );
+
+  let vis = filas;
+  if (H.filtro === "activos") vis = vis.filter((f) => f.estado !== "inactivo");
+  else if (H.filtro !== "todos") vis = vis.filter((f) => f.estado === H.filtro);
+  const q = H.q.trim().toLowerCase();
+  const qs = q.replace(/\s+/g, "");
+  if (q) vis = vis.filter((f) => f.sku_base.toLowerCase().includes(q) || f.sku_base.toLowerCase().replace(/\s+/g, "").startsWith(qs) || (f.titulo || "").toLowerCase().includes(q));
+  const { col, dir } = H.orden;
+  const val = (f) => (col === "nm" ? f.nm.toLowerCase() : col === "ultima_venta" ? f.ultima_venta || "" : f[col] ?? -Infinity);
+  if (col === "sku_base") vis.sort((a, b) => a.sku_base.localeCompare(b.sku_base, "es", { numeric: true }) * dir);
+  else vis.sort((a, b) => { const x = val(a), y = val(b); return (x < y ? -1 : x > y ? 1 : 0) * dir; });
+
+  const COLS = [["", null], ["SKU", "sku_base"], ["Título de la publicación", "nm"], ["Unid. 30 d", "unid_30", 1], ["Unid./día 30 d", "v30", 1], ["Unid. 90 d", "unid_90", 1], ["Tendencia", "tend", 1], ["Días c/venta 90 d", "dias_venta_90", 1], ["Última venta", "ultima_venta", 1], ["Estado", null]];
+  const sel = new Set(state.seleccion);
+  const thead = h("tr", {}, COLS.map(([t, k, num]) => {
+    if (!k) return h("th", {}, t, ayuda(AYUDA[t]));
+    const arrow = col === k ? (dir < 0 ? " ↓" : " ↑") : "";
+    return h("th", { class: "sortable" + (num ? " num" : ""), onclick: (e) => { if (e.target.closest(".q")) return; H.orden = { col: k, dir: col === k ? -dir : (k === "sku_base" || k === "nm" ? 1 : -1) }; render(); } }, t + arrow, ayuda(AYUDA[t]));
+  }));
+  const tbody = h("tbody");
+  const MAXF = 500;
+  for (const f of vis.slice(0, MAXF)) {
+    const chk = h("input", { type: "checkbox", "aria-label": "Seleccionar " + f.sku_base, onchange: (e) => { toggleSku(f.sku_base, e.target.checked); } });
+    chk.checked = sel.has(f.sku_base);
+    const tr = h("tr", { class: sel.has(f.sku_base) ? "sel" : "" },
+      h("td", {}, chk),
+      h("td", { class: "skucol" }, h("b", { text: f.sku_base })),
+      h("td", { class: "nm ink2", title: f.titulo || "", text: f.titulo || "" }),
+      h("td", { class: "num", text: fN(f.unid_30) }),
+      h("td", { class: "num", text: fN2(f.v30) }),
+      h("td", { class: "num", text: fN(f.unid_90) }),
+      h("td", { class: "num", text: f.unid_90 >= 10 ? fPs(f.tend) : "–" }),
+      h("td", { class: "num", text: f.dias_venta_90 || "–" }),
+      h("td", { class: "num", text: fD(f.ultima_venta) + (f.diasSin > 0 && f.diasSin < 9999 ? ` (${f.diasSin} d)` : "") }),
+      h("td", {}, ESTADOS[f.estado]()),
+    );
+    tr.addEventListener("dblclick", () => { if (!sel.has(f.sku_base)) toggleSku(f.sku_base, true); irA("resumen"); });
+    tbody.append(tr);
+  }
+  const buscador = h("input", { type: "search", placeholder: "Buscar SKU o producto…", value: H.q, "aria-label": "Buscar en la tabla" });
+  buscador.addEventListener("input", (e) => { H.q = e.target.value; clearTimeout(buscador._t); buscador._t = setTimeout(() => { const pos = e.target.selectionStart; render(); const b = $("#homeQ"); if (b) { b.focus(); b.setSelectionRange(pos, pos); } }, 200); });
+  buscador.id = "homeQ";
+  const filtroSel = h("select", { "aria-label": "Filtro de estado", onchange: (e) => { H.filtro = e.target.value; render(); } },
+    [["activos", "Con venta 90 d"], ["todos", "Todos"], ["frenado", "Frenados"], ["caida", "En caída"], ["alza", "En alza"], ["activo", "Estables"], ["inactivo", "Sin ventas 90 d"]].map(([v, t]) => { const o = h("option", { value: v, text: t }); if (H.filtro === v) o.selected = true; return o; }));
+  filtroSel.style.cssText = "padding:6px 8px;border-radius:8px;border:1px solid var(--axis);background:var(--surface)";
+
+  const nSel = state.seleccion.length;
+  return [
+    tiles,
+    h("div", { class: "card" },
+      h("div", { class: "card-head" },
+        h("div", {}, h("h2", { text: "Ranking de rotación" }), h("p", { class: "sub", text: `Ventas válidas a hoy · SKU completo, unidades tal cual se vendieron · ${nf0.format(vis.length)} SKUs. Tildá los que quieras analizar (doble clic abre el Resumen).` })),
+        h("div", { class: "toolbar" }, buscador, filtroSel,
+          h("button", { class: "btn primary", disabled: !nSel, onclick: () => irA("resumen"), text: nSel ? `Analizar ${nSel} SKU${nSel > 1 ? "s" : ""} →` : "Elegí SKUs" })),
+      ),
+      h("div", { class: "tbl-wrap" }, h("table", {}, h("thead", {}, thead), tbody)),
+      vis.length > MAXF ? h("p", { class: "sub", style: "margin-top:8px", text: `Mostrando ${MAXF} de ${nf0.format(vis.length)}. Usá el buscador para acotar.` }) : null,
+    ),
+  ];
+}
+
+/* ---------- RESUMEN ---------- */
+function claveRepo() { return "rot.repo." + [...state.seleccion].sort().join("|"); }
+function leerRepo() { try { return JSON.parse(localStorage.getItem(claveRepo())) || {}; } catch { return {}; } }
+function guardarRepo(o) { try { localStorage.setItem(claveRepo(), JSON.stringify(o)); } catch {} }
+
+function insights(r) {
+  const out = [];
+  const pct = r.v90 > 0 ? r.v30 / r.v90 - 1 : null;
+  if (pct !== null) {
+    if (pct >= 0.15) out.push(["up", "good", `Acelerando: vende ${nf2.format(r.v30)} u/día en los últimos 30 días, ${fPs(pct)} vs. el promedio de 90 días.`]);
+    else if (pct <= -0.15) out.push(["down", "warn", `Frenando: ${nf2.format(r.v30)} u/día en los últimos 30 días, ${fPs(pct)} vs. el promedio de 90 días.`]);
+    else out.push(["ok", "neutral", `Ritmo estable: ${nf2.format(r.v30)} u/día (≈ ${nf0.format(r.v30 * 30)} u/mes).`]);
+  }
+  if (r.ultimaVenta) {
+    const sin = dn(r.fin) - dn(r.ultimaVenta);
+    if (sin >= 7) out.push(["stop", "bad", `Última venta el ${fD(r.ultimaVenta)}: ${sin} días sin vender al corte. ¿Hay stock y la publicación está activa?`]);
+  }
+  if (r.huecos.length) {
+    const top = [...r.huecos].sort((a, b) => b.n - a.n).slice(0, 3).map((g) => `${fD(g.desde)}–${fD(g.hasta)} (${g.n} d)`).join(", ");
+    out.push(["stop", "bad", `${r.huecos.length} corte${r.huecos.length > 1 ? "s" : ""} de 3+ días sin venta en el período. Los más largos: ${top}. Probables quiebres de stock o pausas: confirmar con Stock.`]);
+  }
+  // reemplazo entre SKUs (uno deja de vender y otro arranca)
+  const ps = r.porSku.filter((p) => p.primera && p.ultima);
+  for (const a of ps) for (const b of ps) {
+    if (a === b) continue;
+    const delta = dn(b.primera) - dn(a.ultima);
+    if (delta >= -15 && delta <= 20 && dn(r.fin) - dn(a.ultima) > 20 && b.primera > a.primera)
+      out.push(["ok", "neutral", `${etiquetaSku(b.sku)} reemplazó a ${etiquetaSku(a.sku)}: ${etiquetaSku(a.sku)} vendió hasta el ${fD(a.ultima)} y ${etiquetaSku(b.sku)} arrancó el ${fD(b.primera)}. Conviene leerlos juntos.`]);
+  }
+  const completos = r.meses.filter((m) => m.diasPer >= 28);
+  if (completos.length >= 3) {
+    const best = completos.reduce((a, b) => (b.uv > a.uv ? b : a)), worst = completos.reduce((a, b) => (b.uv < a.uv ? b : a));
+    out.push(["ok", "neutral", `Mejor mes: ${fMes(best.mes)} (${nf0.format(best.uv)} u). Peor mes completo: ${fMes(worst.mes)} (${nf0.format(worst.uv)} u).`]);
+  }
+  const canc = r.tot.uv + r.tot.unv > 0 ? r.tot.unv / (r.tot.uv + r.tot.unv) : 0;
+  if (canc >= 0.05) out.push(["down", "warn", `Cancelación/devolución alta: ${fP(canc)} de las unidades del período.`]);
+  return out;
+}
+function vistaResumen(r) {
+  const rep = Object.assign({ stock: "", lead: 15, seg: 7, cubrir: 30 }, leerRepo());
+  const kv = h("div", { class: "kv" });
+  const add = (k, v, ind) => kv.append(h("div", { class: "k" + (ind ? " ind" : "") }, k, ind ? null : ayuda(AYUDA[k])), h("div", { class: "v" + (ind ? " ind" : ""), text: v }));
+  add("Período", `${fD(r.desde)} → ${fD(r.fin)} (${nf0.format(r.dias.length)} días)`);
+  add("Unidades vendidas", fN(r.tot.uv));
+  add("Ventas (órdenes)", fN(r.tot.ven));
+  add("Unidades por venta", r.tot.ven ? nf2.format(r.tot.uv / r.tot.ven) : "–");
+  if (r.porSku.length > 1) for (const p of r.porSku) add(p.sku, fN(p.uv), true);
+  add("Unidades no válidas", fN(r.tot.unv));
+  add("Ingreso bruto", fM(r.tot.ing));
+  add("Precio promedio", fM(r.tot.uv ? r.tot.ing / r.tot.uv : 0));
+  add("Cargos ML sobre ingreso ML", fP(r.tot.ingML ? r.tot.car / r.tot.ingML : null));
+
+  const kv2 = h("div", { class: "kv" });
+  const add2 = (k, v) => kv2.append(h("div", { class: "k" }, ...conAyuda(k)), h("div", { class: "v", text: v }));
+  add2("Unid./día · últimos 30 días", fN2(r.v30));
+  add2("Unid./día · últimos 60 días", fN2(r.v60));
+  add2("Unid./día · últimos 90 días", fN2(r.v90));
+  add2("Proyección mensual (vel. 30 d × 30)", fN(Math.round(r.v30 * 30)));
+  add2("Días sin venta en los últimos 90", nf0.format(Math.max(0, r.sinVenta90)));
+  add2("Racha más larga sin ventas (período)", nf0.format(r.rachaMax) + " días");
+
+  // reposición
+  const kv3 = h("div", { class: "kv" });
+  const out = {};
+  const inp = (key, label, hint) => {
+    const i = h("input", { type: "number", min: 0, step: 1, value: rep[key], "aria-label": label, placeholder: key === "stock" ? "—" : "" });
+    i.addEventListener("input", () => { rep[key] = i.value === "" ? "" : Number(i.value); guardarRepo(rep); calcRepo(); });
+    kv3.append(h("div", { class: "k" }, ...conAyuda(label)), h("div", { class: "v" }, i));
+    if (hint) kv3.append(h("div", { class: "hint", text: hint }));
+  };
+  inp("stock", "Stock actual (unidades)", "Stock físico de hoy de estos SKUs.");
+  inp("lead", "Lead time del proveedor (días)", "Ejemplo 15. Poné el plazo real pedido → depósito.");
+  inp("seg", "Stock de seguridad (días)", "Ejemplo 7. Colchón para variación de demanda o demoras.");
+  inp("cubrir", "Días a cubrir con el pedido", "Ejemplo 30. Cuántos días de venta querés comprar.");
+  const res = h("div", { class: "kv", style: "margin-top:8px" });
+  const verdict = h("div", { class: "verdict" });
+  function calcRepo() {
+    res.textContent = "";
+    const v = r.v30, stock = rep.stock === "" ? null : Number(rep.stock);
+    const pp = Math.ceil(v * ((+rep.lead || 0) + (+rep.seg || 0)));
+    const cob = stock !== null && v > 0 ? stock / v : null;
+    const sug = stock !== null ? Math.max(0, Math.ceil(v * ((+rep.lead || 0) + (+rep.seg || 0) + (+rep.cubrir || 0)) - stock)) : null;
+    const r2 = (k, val) => res.append(h("div", { class: "k" }, ...conAyuda(k)), h("div", { class: "v", text: val }));
+    r2("Punto de pedido (unidades)", nf0.format(pp));
+    r2("Cobertura actual", cob === null ? "–" : nf0.format(cob) + " días");
+    r2("Quiebre estimado", cob === null ? "–" : fD(iso(dn(hoyAR()) + Math.floor(cob))));
+    r2("Pedido sugerido (unidades)", sug === null ? "–" : nf0.format(sug));
+    verdict.textContent = "";
+    if (stock === null) verdict.append(tag("off", "neutral", "Cargá el stock actual para saber si hay que pedir."));
+    else if (v === 0) verdict.append(tag("off", "neutral", "Sin ventas en los últimos 30 días: no hay velocidad para proyectar."));
+    else if (stock <= pp) verdict.append(tag("stop", "bad", `Pedir ya: el stock (${nf0.format(stock)}) está en o debajo del punto de pedido (${nf0.format(pp)}).`));
+    else verdict.append(tag("ok", "good", `No hace falta pedir todavía: faltan ${nf0.format(stock - pp)} u para llegar al punto de pedido.`));
+  }
+  calcRepo();
+
+  const ins = insights(r);
+  const ul = h("ul", { class: "insights" }, ins.map(([ic, cl, t]) => { return h("li", {}, tag(ic, cl, ""), h("span", { text: t })); }));
+
+  // tabla por SKU
+  const tPor = r.porSku.length > 1 ? h("div", { class: "card" }, h("h2", { text: "Por SKU" }), h("p", { class: "sub", text: "Unidades e ingreso del período; velocidad al corte." }),
+    h("div", { class: "tbl-wrap" }, h("table", {},
+      h("thead", {}, h("tr", {}, h("th", { text: "SKU" }), h("th", { text: "Título de la publicación" }), h("th", { class: "num", text: "Unidades" }), h("th", { class: "num", text: "% del total" }), h("th", { class: "num", text: "Unid./día 30 d" }), h("th", { class: "num", text: "Ingreso" }), h("th", { class: "num", text: "Primera venta" }), h("th", { class: "num", text: "Última venta" }))),
+      h("tbody", {}, r.porSku.map((p) => h("tr", {},
+        h("td", {}, h("span", { class: "chip", style: "padding:2px 8px" }, h("span", { class: "dot", style: `background:${colorSku(p.sku)}` }), h("b", { text: etiquetaSku(p.sku) }))),
+        h("td", { class: "nm", text: p.nombre }), h("td", { class: "num", text: fN(p.uv) }), h("td", { class: "num", text: fP(r.tot.uv ? p.uv / r.tot.uv : null) }),
+        h("td", { class: "num", text: fN2(p.v30) }), h("td", { class: "num", text: fM(p.ing) }), h("td", { class: "num", text: fD(p.primera) }), h("td", { class: "num", text: fD(p.ultima) }))))))) : null;
+
+  return [
+    h("div", { class: "grid2" },
+      h("div", { class: "card" }, h("h2", { text: "Ventas del período" }), h("p", { class: "sub", text: "Solo ventas válidas, salvo la fila de no válidas." }), kv),
+      h("div", { class: "card" }, h("h2", { text: "Velocidad de venta" }), h("p", { class: "sub", text: `Al corte ${fD(r.fin)}, sobre la historia completa (no depende del período elegido).` }), kv2),
+    ),
+    h("div", { class: "grid2" },
+      h("div", { class: "card" }, h("h2", { text: "Reposición" }), h("p", { class: "sub", text: "Las celdas amarillas se editan y se guardan en este navegador para esta selección de SKUs." + (r.porSku.length > 1 ? " Con varios SKUs, tiene sentido solo si son sustitutos (mismo producto)." : "") }), kv3, res, verdict),
+      h("div", { class: "card" }, h("h2", { text: "Lectura rápida" }), h("p", { class: "sub", text: "Generada automáticamente a partir de los datos." }), ins.length ? ul : h("p", { class: "muted", text: "Sin observaciones." })),
+    ),
+    tPor,
+    h("div", { class: "card" }, h("h2", { text: "Definiciones y alcance" }),
+      h("ul", { class: "defs" },
+        h("li", { text: `Venta válida: excluye ${NO_VALIDAS_TXT}. Esas se muestran como "no válidas".` }),
+        h("li", { text: "Ingreso bruto = precio × unidades. Cargos ML = cargos por venta que descuenta ML (sin envío). Montos en ARS nominales: no compares precios entre meses sin ajustar por inflación." }),
+        h("li", { text: "Fuentes: Mercado Libre (API + reportes históricos desde 2024) y tienda online (exports CSV/XLSX importados). Detalle en la solapa Datos." }),
+        h("li", { text: "SKU = el campo SKU completo, tal cual figura en Mercado Libre o en la tienda. Cada texto distinto es un SKU distinto (ej. \"96 x5 - P A O A4 x 100hjs\" va separado de \"96 - P A O A4 x 100hjs\"). Las unidades son las vendidas de ese SKU, sin convertir packs." }),
+        h("li", { text: "Ventas = cantidad de órdenes válidas (cada orden puede llevar varias unidades). Unid./venta = unidades ÷ ventas." }),
+        h("li", { text: "En el buscador cada coincidencia tiene su casilla: tildá las que quieras o usá \"Tildar todas\" (ej. escribí \"208\" para traer toda la familia)." }),
+        h("li", { text: "Corte por defecto: ayer (último día completo). Datos sincronizados cada 10 minutos." }),
+      )),
+  ];
+}
+
+/* ---------- MENSUAL ---------- */
+function vistaMensual(r) {
+  const meses = r.meses;
+  const series = seriesDe(r, (i, k) => meses[i].porSku[k] || 0, meses.length);
+  const chartEl = h("div", { class: "chart" });
+  const multi = state.seleccion.length > 1 && state.seleccion.length <= 6;
+  const head = ["Mes", ...(multi ? state.seleccion.map((k) => `Unid. ${etiquetaSku(k)}`) : []), "Unid. total", "Ventas", "Unid./venta", "No válidas", "% no válidas", "Días con venta", "Días del período", "Unid./día", "Ingreso bruto", "Precio prom.", "Cargos ML %"];
+  const fila = (m, isTot) => h("tr", {},
+    h("td", { text: isTot ? "Total" : fMes(m.mes) + (m.diasPer < new Date(Date.UTC(+m.mes.slice(0, 4), +m.mes.slice(5, 7), 0)).getUTCDate() ? " *" : "") }),
+    ...(multi ? state.seleccion.map((k) => h("td", { class: "num", text: fN(m.porSku[k]) })) : []),
+    h("td", { class: "num", text: fN(m.uv) }), h("td", { class: "num", text: fN(m.ven) }), h("td", { class: "num", text: m.ven ? nf2.format(m.uv / m.ven) : "–" }),
+    h("td", { class: "num", text: fN(m.unv) }), h("td", { class: "num", text: fP(m.uv + m.unv ? m.unv / (m.uv + m.unv) : null) }),
+    h("td", { class: "num", text: fN(m.diasVenta) }), h("td", { class: "num", text: fN(m.diasPer) }), h("td", { class: "num", text: fN2(m.diasPer ? m.uv / m.diasPer : 0) }),
+    h("td", { class: "num", text: fM(m.ing) }), h("td", { class: "num", text: fM(m.uv ? m.ing / m.uv : 0) }), h("td", { class: "num", text: fP(m.ingML ? m.car / m.ingML : null) }),
+  );
+  const tot = meses.reduce((a, m) => { a.uv += m.uv; a.ven += m.ven; a.unv += m.unv; a.ing += m.ing; a.ingML += m.ingML; a.car += m.car; a.diasVenta += m.diasVenta; a.diasPer += m.diasPer; for (const [k, v] of Object.entries(m.porSku)) a.porSku[k] = (a.porSku[k] || 0) + v; return a; }, { uv: 0, ven: 0, unv: 0, ing: 0, ingML: 0, car: 0, diasVenta: 0, diasPer: 0, porSku: {} });
+  const out = [
+    h("div", { class: "card" },
+      h("h2", { text: "Unidades vendidas por mes" }), h("p", { class: "sub", text: "Ventas válidas, apiladas por SKU." }),
+      series.length > 1 ? legend(series) : null, chartEl),
+    h("div", { class: "card" },
+      h("h2", { text: "Detalle mensual" }), h("p", { class: "sub", text: "* mes parcial (el período empieza o termina dentro del mes). Montos en ARS nominales." }),
+      h("div", { class: "tbl-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, head.map((t, i) => h("th", { class: (i ? "num" : "") + (t.length > 24 ? " wrap" : "") }, t, ayuda(AYUDA[t]))))), h("tbody", {}, meses.map((m) => fila(m))), h("tfoot", {}, fila(tot, true))))),
+  ];
+  requestAnimationFrame(() => barChart(chartEl, { labels: meses.map((m) => m.mes), series, height: 280, xLabel: fMes, tipTitle: (l) => fMes(l) }));
+  return out;
+}
+
+/* ---------- DIARIO ---------- */
+function vistaDiario(r) {
+  const dias = r.dias;
+  const series = seriesDe(r, (i, k) => dias[i].porSku[k] || 0, dias.length);
+  const chartEl = h("div", { class: "chart" });
+  const multi = state.seleccion.length > 1 && state.seleccion.length <= 6;
+  const head = ["Fecha", "Día", ...(multi ? state.seleccion.map((k) => `Unid. ${etiquetaSku(k)}`) : []), "Unid. total", "Ventas", "No válidas", "Ingreso bruto", "Cargos ML", "Ingreso neto", "Días seguidos sin venta"];
+  const soloVentas = state._soloVentas || false;
+  const tbody = h("tbody");
+  const lista = [...dias].reverse().filter((d) => !soloVentas || d.uv > 0 || d.unv > 0);
+  for (const d of lista) {
+    tbody.append(h("tr", { class: d.hueco ? "gap" : "" },
+      h("td", { class: "num", style: "text-align:left", text: fD(d.fecha) }), h("td", { class: "muted", text: diaSem(d.fecha) }),
+      ...(multi ? state.seleccion.map((k) => h("td", { class: "num", text: fN(d.porSku[k]) })) : []),
+      h("td", { class: "num", text: fN(d.uv) }), h("td", { class: "num", text: fN(d.ven) }), h("td", { class: "num", text: fN(d.unv) }), h("td", { class: "num", text: fM(d.ing) }),
+      h("td", { class: "num", text: fM(d.car) }), h("td", { class: "num", text: fM(d.ing - d.car) }), h("td", { class: "num", text: d.racha ? d.racha : "–" })));
+  }
+  const chk = h("input", { type: "checkbox", id: "soloV", onchange: (e) => { state._soloVentas = e.target.checked; render(); } });
+  chk.checked = soloVentas;
+  const out = [
+    h("div", { class: "card" },
+      h("h2", { text: "Unidades vendidas por día" }),
+      h("p", { class: "sub", text: `Bandas rojas = 3 o más días seguidos sin venta (${r.huecos.length} en el período): posibles quiebres de stock.` }),
+      legend(series.length > 1 ? series : [], "Racha sin ventas (3+ días)"), chartEl),
+    h("div", { class: "card" },
+      h("div", { class: "card-head" },
+        h("div", {}, h("h2", { text: "Detalle diario" }), h("p", { class: "sub", text: "Más reciente primero. Filas rojas = días dentro de una racha sin ventas de 3+ días." })),
+        h("label", { class: "toolbar ink2", style: "font-size:13px" }, chk, "Solo días con movimiento")),
+      h("div", { class: "tbl-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, head.map((t, i) => h("th", { class: (i > 1 ? "num" : "") + (t.length > 24 ? " wrap" : "") }, t, ayuda(AYUDA[t]))))), tbody))),
+  ];
+  requestAnimationFrame(() => barChart(chartEl, {
+    labels: dias.map((d) => d.fecha), series, height: 260,
+    xLabel: (l) => (dias.length > 120 ? fMes(l.slice(0, 7)) : `${l.slice(8, 10)}/${l.slice(5, 7)}`),
+    tipTitle: (l) => `${diaSem(l)} ${fD(l)}`,
+    ticks: dias.length > 120 ? dias.map((d, i) => (d.fecha.endsWith("-01") ? i : -1)).filter((i) => i >= 0) : null,
+    bands: r.huecos, bandLabel: (b) => `Racha sin ventas: ${fD(b.desde)}–${fD(b.hasta)} (${b.n} días)`,
+  }));
+  return out;
+}
+
+/* ---------- DATOS (fuentes, archivos e importación) ---------- */
+const BUCKET = "ventas-ml-reportes";
+const FUENTES = {
+  api_ml: ["API Mercado Libre", "Sincronización automática cada 10 minutos (últimos 12 meses en adelante)."],
+  reportes_ml: ["Reportes Excel de ML", "Históricos subidos al bucket (desde 2024). Se completan con la API donde se pisan."],
+  tienda_online: ["Tienda online", "Exports de pedidos (CSV o XLSX) importados acá abajo."],
+  agregado_app: ["Agregado de la app", "Resumen por día y presentación que lee esta app. Se recalcula cada 10 min (y al importar)."],
+};
+const ESTADO_ARCH = {
+  ok: () => tag("ok", "good", "Procesado"),
+  pendiente: () => tag("off", "neutral", "En cola"),
+  en_curso: () => tag("off", "warn", "Procesando"),
+  error: () => tag("stop", "bad", "Error"),
+};
+const fBytes = (b) => (!b ? "–" : b > 1048576 ? nf1.format(b / 1048576) + " MB" : nf0.format(Math.round(b / 1024)) + " KB");
+const fDT = (t) => (t ? new Date(t).toLocaleString("es-AR", { timeZone: TZ, day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" }) : "–");
+const datosUI = { filtro: "todos", log: [] };
+
+function vistaDatos() {
+  const fuentesBox = h("div", { class: "tbl-wrap" }, h("p", { class: "sub", style: "padding:10px", text: "Cargando…" }));
+  const archBox = h("div", { class: "tbl-wrap" }, h("p", { class: "sub", style: "padding:10px", text: "Cargando…" }));
+  const seg = h("div", { class: "seg" }, [["todos", "Todos"], ["tienda_online", "Tienda online"], ["reporte_ml", "Reportes ML"]].map(([v, t]) =>
+    h("button", { "aria-pressed": String(datosUI.filtro === v), text: t, onclick: () => { datosUI.filtro = v; render(); } })));
+
+  (async () => {
+    const [f, a] = await Promise.all([sb.rpc("rot_fuentes"), rpcTodo("rot_archivos", {}).catch((e) => ({ error: e }))]);
+    if (f.error) fuentesBox.replaceChildren(h("p", { class: "err", style: "padding:10px", text: f.error.message }));
+    else fuentesBox.replaceChildren(h("table", {},
+      h("thead", {}, h("tr", {}, ["Fuente", "Qué es", "Líneas", "Ventas desde", "Ventas hasta", "Última actualización"].map((t, i) => h("th", { class: i >= 2 ? "num" : "", text: t })))),
+      h("tbody", {}, f.data.map((x) => h("tr", {},
+        h("td", {}, h("b", { text: (FUENTES[x.fuente] || [x.fuente])[0] })), h("td", { class: "ink2", style: "white-space:normal", text: (FUENTES[x.fuente] || ["", ""])[1] }),
+        h("td", { class: "num", text: fN(Number(x.lineas)) }), h("td", { class: "num", text: fD(x.desde) }), h("td", { class: "num", text: fD(x.hasta) }), h("td", { class: "num", text: fDT(x.ultima_carga) }))))));
+    if (a.error) { archBox.replaceChildren(h("p", { class: "err", style: "padding:10px", text: a.error.message })); return; }
+    const lista = a.filter((x) => datosUI.filtro === "todos" || x.tipo === datosUI.filtro);
+    archBox.replaceChildren(h("table", {},
+      h("thead", {}, h("tr", {}, ["Archivo", "Tipo", "Estado", "Filas cargadas", "Descartadas", "Tamaño", "Subido", "Procesado", "Detalle"].map((t, i) => h("th", { class: i >= 3 && i <= 7 ? "num" : "", text: t })))),
+      h("tbody", {}, lista.map((x) => h("tr", {},
+        h("td", { class: "nm", title: x.path, text: x.path.replace(/^tienda\//, "") }),
+        h("td", { class: "ink2", text: x.tipo === "tienda_online" ? "Tienda online" : "Reporte ML" }),
+        h("td", {}, (ESTADO_ARCH[x.estado] || (() => tag("off", "neutral", x.estado)))()),
+        h("td", { class: "num", text: fN(x.filas_cargadas) }), h("td", { class: "num", text: fN(x.descartadas) }),
+        h("td", { class: "num", text: fBytes(Number(x.tamano)) }), h("td", { class: "num", text: fDT(x.subido_at) }), h("td", { class: "num", text: fDT(x.terminado_at) }),
+        h("td", { class: "nm", style: "color:var(--bad)", title: x.ultimo_error || "", text: x.ultimo_error || "" }))))));
+    $("#archCount") && ($("#archCount").textContent = `${nf0.format(lista.length)} archivo${lista.length === 1 ? "" : "s"}`);
+  })();
+
+  const out = [];
+  if (state.puedeImportar) {
+    const input = h("input", { type: "file", accept: ".csv,.xlsx", multiple: true, class: "hidden", onchange: (e) => subirArchivos([...e.target.files]) });
+    const zona = h("div", { class: "drop", tabindex: 0, role: "button", "aria-label": "Elegir archivos para importar", onclick: () => input.click(), onkeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); input.click(); } } },
+      h("b", { text: "Arrastrá acá el export de pedidos de la tienda" }), h("span", { class: "muted", text: "o hacé clic para elegirlo · CSV o XLSX · podés subir varios" }), input);
+    zona.addEventListener("dragover", (e) => { e.preventDefault(); zona.classList.add("over"); });
+    zona.addEventListener("dragleave", () => zona.classList.remove("over"));
+    zona.addEventListener("drop", (e) => { e.preventDefault(); zona.classList.remove("over"); subirArchivos([...e.dataTransfer.files]); });
+    out.push(h("div", { class: "card" },
+      h("h2", { text: "Importar ventas de tienda online" }),
+      h("p", { class: "sub", text: "Export de pedidos de la tienda (mismas columnas que siempre: Fecha de Alta, Referencia del Pedido, Referencia de Producto, Estatus, Cantidad…). Si subís un archivo que se pisa con otro (ej. el mes completo después de uno parcial), los pedidos se actualizan: no se duplican." }),
+      zona,
+      datosUI.log.length ? h("ul", { class: "upl" }, datosUI.log.map((l) => h("li", {}, (ESTADO_ARCH[l.estado] || (() => tag("off", "neutral", "")))(), h("b", { text: l.nombre }), h("span", { class: l.estado === "error" ? "err" : "ink2", text: l.msg })))) : null));
+  }
+  out.push(
+    h("div", { class: "card" }, h("h2", { text: "Fuentes de datos" }), h("p", { class: "sub", text: "Qué hay cargado de cada origen. La app suma Mercado Libre (API + reportes, sin duplicar) y tienda online." }), fuentesBox),
+    h("div", { class: "card" },
+      h("div", { class: "card-head" }, h("div", {}, h("h2", { text: "Archivos leídos" }), h("p", { class: "sub", id: "archCount", text: "" })), seg),
+      archBox));
+  return out;
+}
+
+async function subirArchivos(files) {
+  const validos = files.filter((f) => /\.(csv|xlsx)$/i.test(f.name));
+  for (const f of files) if (!validos.includes(f)) datosUI.log.unshift({ nombre: f.name, estado: "error", msg: "Formato no soportado: tiene que ser .csv o .xlsx" });
+  render();
+  for (const f of validos) {
+    const item = { nombre: f.name, estado: "en_curso", msg: "Subiendo…" };
+    datosUI.log.unshift(item); render();
+    const ahora = new Intl.DateTimeFormat("sv-SE", { timeZone: TZ, dateStyle: "short", timeStyle: "medium" }).format(new Date()).replace(" ", "_").replace(/:/g, "");
+    const limpio = f.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9._-]+/g, "_");
+    const path = `tienda/${ahora}_${limpio}`;
+    const tipo = /\.csv$/i.test(f.name) ? "text/csv" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    const up = await sb.storage.from(BUCKET).upload(path, f, { contentType: tipo, upsert: false });
+    if (up.error) { Object.assign(item, { estado: "error", msg: "No se pudo subir: " + up.error.message }); render(); continue; }
+    item.msg = "Procesando… (puede tardar hasta un minuto)"; render();
+    const { data, error } = await sb.functions.invoke("ml-historico-import/procesar", { body: { path } });
+    if (error) {
+      let msg = error.message;
+      try { msg = (await error.context.json()).error || msg; } catch {}
+      Object.assign(item, { estado: "pendiente", msg: "Subido. No se pudo procesar ahora (" + msg + "): se procesa solo en los próximos 10 minutos." });
+    } else {
+      const a = data && data.archivo;
+      if (a && a.estado === "ok") Object.assign(item, { estado: "ok", msg: `Listo: ${nf0.format(a.filas_cargadas)} líneas cargadas${a.descartadas ? `, ${nf0.format(a.descartadas)} descartadas` : ""}.` });
+      else if (a && a.estado === "error") Object.assign(item, { estado: "error", msg: a.ultimo_error || "Error al procesar" });
+      else Object.assign(item, { estado: "pendiente", msg: "Subido y en cola: se termina de procesar en los próximos minutos." });
+    }
+    render();
+  }
+  state.cache.clear();
+  try { await cargarCatalogo(); } catch {}
+  render();
+}
+
+
+/* ===================== Funcionamiento de la app ===================== */
+const FUNCIONAMIENTO = [
+  ["Para qué sirve", [
+    "Muestra cuánto y a qué ritmo se vende cada SKU (rotación), para decidir cuándo y cuánto reponer y detectar a tiempo productos frenados o quiebres de stock.",
+    "Suma Mercado Libre y tienda online. Todo lo que ves son ventas válidas salvo que diga \"no válidas\".",
+  ]],
+  ["De dónde salen los datos", [
+    "• API de Mercado Libre: se sincroniza sola cada 10 minutos.",
+    "• Reportes Excel de ML: el histórico desde enero 2024 (cargado una vez). Donde se pisa con la API, manda la API y no se duplica.",
+    "• Tienda online: los exports de pedidos (CSV o XLSX) que se suben en la pestaña Datos.",
+    "• La app lee un resumen por día y SKU que se recalcula cada 10 minutos (y al importar un archivo). La hora de la última actualización está arriba a la derecha.",
+  ]],
+  ["Qué es un SKU acá", [
+    "El campo SKU completo, tal cual está en Mercado Libre o en la tienda (ej. \"208 A - T DYE Global-250ml - AMARILLO\"). Cada texto distinto es un SKU distinto.",
+    "Las unidades son las vendidas de ese SKU, sin convertir packs: 3 ventas de \"96 x5\" son 3 unidades de ese SKU.",
+    "Si un mismo producto se cargó con textos distintos (ej. dos variantes del 934), aparece partido: elegí los dos para verlo junto.",
+  ]],
+  ["Venta válida y no válida", [
+    "Válida: no cancelada, no devuelta, no \"no entregada\" y con el pago acreditado. En tienda, \"Retira – Paga al retirar\" cuenta como válida.",
+    "No válida: cancelada, devuelta, no entregada, en espera de pago o con error de pago. Se muestra aparte y no cuenta para la rotación.",
+  ]],
+  ["Filtros de arriba", [
+    "• SKUs: buscá por cualquier parte del texto o por el título de la publicación. Cada coincidencia tiene una casilla: tildá o destildá las que quieras sin que se cierre la lista, o usá \"Tildar todas\" (ej. escribí \"i s a v\" o \"208\" y traés todos). \"Listo\" o Escape cierra la lista.",
+    "• Período: 90 días, 6 meses, 12 meses, todo, o un rango. Por defecto corta ayer (último día completo); para ver hoy, usá Rango con hasta = hoy.",
+    "• Canal: todos, solo Mercado Libre o solo tienda.",
+    "• El link del navegador guarda lo que elegiste: si lo compartís, el otro ve lo mismo.",
+  ]],
+  ["Pestaña Inicio", [
+    "Foto a hoy de todos los SKUs (no depende del período). Los recuadros filtran el ranking:",
+    `• Frenado: vendió en los últimos 90 días pero lleva ${UMBRALES.frenadoDias}+ días sin vender.`,
+    `• En caída / En alza: vende ${Math.abs(UMBRALES.caida * 100)} % más lento / ${UMBRALES.alza * 100} % más rápido en 30 días que su promedio de 90 (con ${UMBRALES.minUnid90}+ unidades en 90 días).`,
+    "Tildá SKUs y tocá \"Analizar\" (o doble clic en la fila).",
+  ]],
+  ["Pestaña Resumen", [
+    "Ventas del período, velocidad de venta a 30/60/90 días, reposición y una lectura rápida automática (tendencia, cortes de venta, SKUs que reemplazan a otros, mejor y peor mes).",
+    "Reposición: cargá stock actual, lead time del proveedor, días de seguridad y días a cubrir (celdas amarillas). Calcula punto de pedido, cobertura, fecha estimada de quiebre y pedido sugerido. Esos valores se guardan solo en tu navegador.",
+    "Si elegís varios SKUs, la reposición tiene sentido solo si son el mismo producto.",
+  ]],
+  ["Pestañas Mensual y Diario", [
+    "Gráfico y tabla por mes o por día, apilados por SKU. Pasá el mouse sobre las barras para ver los números.",
+    `En Diario, las bandas y filas rojas son ${UMBRALES.rachaDias} o más días seguidos sin venta: probables quiebres de stock o publicaciones pausadas.`,
+  ]],
+  ["Pestaña Datos", [
+    "Qué hay cargado de cada fuente, la lista de archivos leídos con su estado y la importación de ventas de tienda online.",
+    "Importar: arrastrá el export de pedidos (CSV o XLSX) y esperá el \"Listo\". Si un archivo se pisa con otro (ej. el mes completo después de un parcial), los pedidos se actualizan, no se duplican. Solo usuarios con permiso de importación.",
+  ]],
+  ["Pestaña 🎫 Tickets", [
+    "Para reportar un error, proponer una mejora o hacer una consulta sobre la app. Podés adjuntar hasta 3 capturas (o pegarlas con Ctrl+V en el detalle).",
+    "Si dejás tildado \"Adjuntar contexto técnico\", el ticket se guarda con la versión, el navegador, la pestaña y los SKUs que estabas mirando y los últimos errores de la app: ayuda a resolverlo rápido.",
+    "Cada ticket tiene su historial (creación, cambios de estado, comentarios), que no se puede editar ni borrar. Solo quienes tienen permiso de gestión cambian estado o prioridad.",
+  ]],
+  ["Excel", [
+    "El botón Excel descarga Resumen, Mensual y Diario de los SKUs, período y canal que estés mirando.",
+  ]],
+  ["Límites conocidos", [
+    "• Los kits (ej. \"208 4colores\") cuentan como un SKU propio: todavía no descuentan las botellas sueltas que llevan adentro.",
+    "• Montos en pesos nominales: no compares precios de meses lejanos sin ajustar por inflación.",
+    "• Mercado Libre informa algunas cancelaciones o devoluciones semanas después: los números de los últimos días pueden ajustarse.",
+  ]],
+];
+function mostrarFuncionamiento() {
+  const cuerpo = h("div", { class: "func" },
+    h("p", { class: "muted", text: `${APP.nombre} · versión ${APP.version}` }),
+    FUNCIONAMIENTO.map(([t, ps]) => h("section", {}, h("h3", { text: t }), ps.map((x) => h("p", { text: x })))));
+  abrirModal("ℹ️ Funcionamiento de la app", cuerpo, 760);
+}
+
+/* ---------- TICKETS (reportes del usuario: tabla compartida "tickets") ---------- */
+const TK_TIPOS = { error: "🔴 Error / algo no anda", mejora: "🟢 Mejora / idea", consulta: "🔵 Consulta / duda" };
+const TK_PRIOR = { baja: "Baja", media: "Media", alta: "Alta", urgente: "Urgente (me bloquea)" };
+const TK_ORDEN_PRIOR = { urgente: 0, alta: 1, media: 2, baja: 3 };
+const TK_ESTADO = {
+  pendiente: () => tag("off", "warn", "Pendiente"),
+  "en revision": () => tag("ok", "neutral", "En revisión"),
+  resuelto: () => tag("ok", "good", "Resuelto"),
+  rechazado: () => tag("stop", "bad", "Rechazado"),
+};
+const tkUI = { estado: "abiertos", alcance: "app", tipo: null, form: { tipo: "error", prioridad: "media", asunto: "", detalle: "", contexto: true }, capturas: [], enviando: false, msg: null };
+
+function contextoTecnico() {
+  return {
+    app: APP.id, version: APP.version, url: location.href, pestana: state.tab, online: navigator.onLine,
+    navegador: navigator.userAgent, pantalla: `${screen.width}x${screen.height}`, fecha_local: new Date().toLocaleString("es-AR"),
+    seleccion: state.seleccion.slice(0, 20), periodo: state.periodo, canal: state.canal, errores_recientes: erroresRecientes.slice(-10),
+  };
+}
+function agregarCapturas(files) {
+  for (const f of files) {
+    if (!/^image\//.test(f.type)) { tkUI.msg = { err: true, t: `"${f.name}" no es una imagen.` }; continue; }
+    if (f.size > MAX_CAPTURA_MB * 1048576) { tkUI.msg = { err: true, t: `"${f.name || "captura"}" pesa más de ${MAX_CAPTURA_MB} MB.` }; continue; }
+    if (tkUI.capturas.length >= MAX_CAPTURAS) { tkUI.msg = { err: true, t: `Máximo ${MAX_CAPTURAS} capturas.` }; break; }
+    tkUI.capturas.push({ file: f, url: URL.createObjectURL(f) });
+  }
+  render();
+}
+async function enviarTicket() {
+  const F = tkUI.form;
+  if (F.asunto.trim().length < 3) { tkUI.msg = { err: true, t: "Poné un asunto (mínimo 3 letras)." }; render(); return; }
+  tkUI.enviando = true; tkUI.msg = { t: "Enviando…" }; render();
+  try {
+    const { data: ses } = await sb.auth.getSession();
+    const user = ses.session && ses.session.user;
+    if (!user) throw new Error("La sesión venció: volvé a ingresar.");
+    const capturas = [];
+    for (let i = 0; i < tkUI.capturas.length; i++) {
+      const f = tkUI.capturas[i].file;
+      const ext = (f.type.split("/")[1] || "png").replace("jpeg", "jpg");
+      const path = `${user.id}/${Date.now()}-${i}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const { error } = await sb.storage.from(TICKETS_BUCKET).upload(path, f, { contentType: f.type, upsert: false });
+      if (error) throw new Error("No se pudo subir la captura: " + error.message);
+      capturas.push({ bucket: TICKETS_BUCKET, path });
+    }
+    const { error } = await sb.from("tickets").insert({
+      tipo: F.tipo, prioridad: F.prioridad, asunto: F.asunto.trim().slice(0, 200), detalle: F.detalle.trim().slice(0, 5000),
+      estado: "pendiente", user_email: user.email, app_origen: APP.id,
+      contexto: F.contexto ? contextoTecnico() : { app: APP.id, version: APP.version }, capturas,
+    });
+    if (error) throw error;
+    tkUI.capturas.forEach((c) => URL.revokeObjectURL(c.url));
+    Object.assign(tkUI, { capturas: [], form: { tipo: "error", prioridad: "media", asunto: "", detalle: "", contexto: true }, msg: { ok: true, t: "Ticket enviado. Lo ves abajo en la lista." } });
+  } catch (e) {
+    registrarError("ticket", e);
+    tkUI.msg = { err: true, t: e.message || String(e) };
+  }
+  tkUI.enviando = false; render();
+}
+
+function vistaTickets() {
+  const F = tkUI.form;
+  const out = [];
+  if (state.esUsuarioApp) {
+    const selTipo = h("select", { "aria-label": "Tipo", onchange: (e) => (F.tipo = e.target.value) }, Object.entries(TK_TIPOS).map(([v, t]) => { const o = h("option", { value: v, text: t }); if (F.tipo === v) o.selected = true; return o; }));
+    const selPrior = h("select", { "aria-label": "Prioridad", onchange: (e) => (F.prioridad = e.target.value) }, Object.entries(TK_PRIOR).map(([v, t]) => { const o = h("option", { value: v, text: t }); if (F.prioridad === v) o.selected = true; return o; }));
+    const asunto = h("input", { type: "text", maxlength: 200, placeholder: "Ej.: el SKU 208 A no aparece en el buscador", value: F.asunto, oninput: (e) => (F.asunto = e.target.value) });
+    const detalle = h("textarea", { rows: 5, maxlength: 5000, placeholder: "Qué hiciste, qué esperabas y qué pasó. Podés pegar capturas con Ctrl+V acá." , oninput: (e) => (F.detalle = e.target.value) });
+    detalle.value = F.detalle;
+    detalle.addEventListener("paste", (e) => {
+      const imgs = [...(e.clipboardData?.items || [])].filter((i) => i.type.startsWith("image/")).map((i) => i.getAsFile()).filter(Boolean);
+      if (imgs.length) { e.preventDefault(); agregarCapturas(imgs.map((f, i) => new File([f], `captura-${Date.now()}-${i}.png`, { type: f.type }))); }
+    });
+    const inputCap = h("input", { type: "file", accept: "image/*", multiple: true, class: "hidden", onchange: (e) => agregarCapturas([...e.target.files]) });
+    const ctx = h("input", { type: "checkbox", id: "tkCtx", onchange: (e) => (F.contexto = e.target.checked) }); ctx.checked = F.contexto;
+    out.push(h("div", { class: "card" },
+      h("h2", { text: "Nuevo ticket" }),
+      h("p", { class: "sub", text: "Para avisar un error, proponer una mejora o hacer una consulta sobre esta app." }),
+      h("div", { class: "tkform" },
+        h("label", { class: "field" }, h("span", { text: "Tipo" }), selTipo),
+        h("label", { class: "field" }, h("span", { text: "Prioridad" }), selPrior),
+        h("label", { class: "field full" }, h("span", { text: "Asunto" }), asunto),
+        h("label", { class: "field full" }, h("span", { text: "Detalle" }), detalle),
+        h("div", { class: "field full" }, h("span", { text: `Capturas de pantalla (opcional, hasta ${MAX_CAPTURAS} · ${MAX_CAPTURA_MB} MB c/u)` }),
+          h("div", { class: "thumbs" },
+            tkUI.capturas.map((c, i) => h("div", { class: "thumb" }, h("img", { src: c.url, alt: "Captura " + (i + 1) }),
+              h("button", { type: "button", "aria-label": "Quitar captura", text: "×", onclick: () => { URL.revokeObjectURL(c.url); tkUI.capturas.splice(i, 1); render(); } }))),
+            tkUI.capturas.length < MAX_CAPTURAS ? h("button", { class: "btn sm", type: "button", text: "+ Agregar captura", onclick: () => inputCap.click() }) : null, inputCap)),
+        h("label", { class: "field full chk" }, ctx, h("span", { text: "Adjuntar contexto técnico automático (versión, navegador, pestaña, SKUs elegidos y últimos errores)" })),
+      ),
+      h("div", { class: "toolbar", style: "margin-top:10px" },
+        h("button", { class: "btn primary", type: "button", disabled: tkUI.enviando || null, text: tkUI.enviando ? "Enviando…" : "Enviar ticket", onclick: enviarTicket }),
+        tkUI.msg ? h("span", { class: tkUI.msg.err ? "err" : tkUI.msg.ok ? "okmsg" : "muted", text: tkUI.msg.t }) : null)));
+  } else {
+    out.push(h("div", { class: "banner", text: "Tu usuario no está dado de alta para crear tickets. Pedile a gerencia que lo habilite." }));
+  }
+
+  // lista
+  const lista = h("div", { class: "tbl-wrap" }, h("p", { class: "sub", style: "padding:10px", text: "Cargando…" }));
+  const tiles = h("div", { class: "tiles", style: "margin:0 0 12px" });
+  const segE = h("div", { class: "seg" }, [["abiertos", "Abiertos"], ["todos", "Todos"], ["resuelto", "Resueltos"], ["rechazado", "Rechazados"]].map(([v, t]) =>
+    h("button", { "aria-pressed": String(tkUI.estado === v), text: t, onclick: () => { tkUI.estado = v; render(); } })));
+  const segA = h("div", { class: "seg" }, [["app", "Solo esta app"], ["todas", "Todas las apps"]].map(([v, t]) =>
+    h("button", { "aria-pressed": String(tkUI.alcance === v), text: t, onclick: () => { tkUI.alcance = v; render(); } })));
+  (async () => {
+    let q = sb.from("tickets").select("id, created_at, tipo, asunto, estado, prioridad, user_email, app_origen, updated_at").order("created_at", { ascending: false }).limit(300);
+    if (tkUI.alcance === "app") q = q.eq("app_origen", APP.id);
+    if (tkUI.estado === "abiertos") q = q.in("estado", ["pendiente", "en revision"]);
+    else if (tkUI.estado !== "todos") q = q.eq("estado", tkUI.estado);
+    const { data, error } = await q;
+    if (error) { registrarError("tickets", error); lista.replaceChildren(h("p", { class: "err", style: "padding:10px", text: error.message })); return; }
+    const cnt = (t) => data.filter((x) => x.tipo === t).length;
+    tiles.replaceChildren(...[["error", "🔴 Errores"], ["mejora", "🟢 Mejoras"], ["consulta", "🔵 Consultas"]].map(([t, l]) =>
+      h("button", { class: "tile", "aria-pressed": String(tkUI.tipo === t), onclick: () => { tkUI.tipo = tkUI.tipo === t ? null : t; render(); } },
+        h("div", { class: "k", text: l }), h("div", { class: "v", text: nf0.format(cnt(t)) }), h("div", { class: "d", text: tkUI.estado === "abiertos" ? "abiertos" : "en la vista" }))));
+    const vis = data.filter((x) => !tkUI.tipo || x.tipo === tkUI.tipo)
+      .sort((a, b) => (TK_ORDEN_PRIOR[a.prioridad] ?? 9) - (TK_ORDEN_PRIOR[b.prioridad] ?? 9) || (a.created_at < b.created_at ? -1 : 1));
+    if (!vis.length) { lista.replaceChildren(h("p", { class: "sub", style: "padding:12px", text: "No hay tickets con estos filtros." })); return; }
+    lista.replaceChildren(h("table", {},
+      h("thead", {}, h("tr", {}, ["#", "Tipo", "Asunto", "Prioridad", "Estado", "Creado por", "Fecha", tkUI.alcance === "todas" ? "App" : null].filter(Boolean).map((t) => h("th", { text: t })))),
+      h("tbody", {}, vis.map((x) => h("tr", { class: "clic", tabindex: 0, onclick: () => abrirTicket(x.id), onkeydown: (e) => { if (e.key === "Enter") abrirTicket(x.id); } },
+        h("td", { class: "num", text: "#" + x.id }), h("td", { text: (TK_TIPOS[x.tipo] || x.tipo).split(" /")[0] }), h("td", { class: "nm", text: x.asunto }),
+        h("td", { text: TK_PRIOR[x.prioridad] || x.prioridad }), h("td", {}, (TK_ESTADO[x.estado] || (() => tag("off", "neutral", x.estado)))()),
+        h("td", { class: "ink2", text: x.user_email || "" }), h("td", { class: "num", text: fDT(x.created_at) }),
+        tkUI.alcance === "todas" ? h("td", { class: "ink2", text: x.app_origen || "" }) : null)))));
+  })();
+  out.push(h("div", { class: "card" },
+    h("div", { class: "card-head" }, h("div", {}, h("h2", { text: "Tickets" }), h("p", { class: "sub", text: "Ordenados por prioridad y después por antigüedad. Tocá uno para ver el detalle y el historial." })), h("div", { class: "toolbar" }, segE, segA)),
+    tiles, lista));
+  return out;
+}
+
+async function abrirTicket(id) {
+  const cuerpo = h("div", {}, h("p", { class: "muted", text: "Cargando…" }));
+  const dlg = abrirModal(`Ticket #${id}`, cuerpo, 720);
+  const [{ data: t, error }, { data: ev }] = await Promise.all([
+    sb.from("tickets").select("*").eq("id", id).single(),
+    sb.from("tickets_eventos").select("*").eq("ticket_id", id).order("created_at", { ascending: true }),
+  ]);
+  if (error) { cuerpo.replaceChildren(h("p", { class: "err", text: error.message })); return; }
+  const kv = h("div", { class: "kv" });
+  const fila = (k, v) => kv.append(h("div", { class: "k", text: k }), h("div", { class: "v" }, v));
+  fila("Tipo", TK_TIPOS[t.tipo] || t.tipo); fila("Prioridad", TK_PRIOR[t.prioridad] || t.prioridad);
+  fila("Estado", (TK_ESTADO[t.estado] || (() => t.estado))()); fila("Creado por", `${t.user_email || "—"} · ${fDT(t.created_at)}`);
+  fila("App", t.app_origen || "—"); if (t.resolucion) fila("Resolución", t.resolucion); if (t.resuelto_en_version) fila("Resuelto en versión", t.resuelto_en_version);
+  const caps = h("div", { class: "thumbs" });
+  for (const c of t.capturas || []) {
+    const { data: u } = await sb.storage.from(c.bucket || TICKETS_BUCKET).createSignedUrl(c.path, 600);
+    if (u && u.signedUrl) caps.append(h("a", { class: "thumb", href: u.signedUrl, target: "_blank", rel: "noopener" }, h("img", { src: u.signedUrl, alt: "Captura" })));
+  }
+  const ETQ = { creado: "Creado", cambio_estado: "Cambió el estado", cambio_prioridad: "Cambió la prioridad", comentario: "Comentario", resolucion: "Resolución" };
+  const hist = h("ul", { class: "hist" }, (ev || []).map((e) => h("li", {},
+    h("div", { class: "muted", text: `${fDT(e.created_at)} · ${e.autor_email || "sistema"} · ${ETQ[e.tipo_evento] || e.tipo_evento}` + (e.valor_anterior || e.valor_nuevo ? `: ${e.valor_anterior || "—"} → ${e.valor_nuevo || "—"}` : "") }),
+    e.comentario ? h("div", { class: "pre", text: e.comentario }) : null)));
+  const txt = h("textarea", { rows: 3, maxlength: 5000, placeholder: "Agregar comentario…" });
+  const msg = h("span", { class: "muted" });
+  const comentar = h("button", { class: "btn", type: "button", text: "Comentar", onclick: async () => {
+    if (!txt.value.trim()) return;
+    const { data: ses } = await sb.auth.getSession();
+    const { error: e2 } = await sb.from("tickets_eventos").insert({ ticket_id: id, tipo_evento: "comentario", comentario: txt.value.trim(), autor_email: ses.session?.user?.email });
+    if (e2) { msg.className = "err"; msg.textContent = e2.message; return; }
+    dlg.close(); abrirTicket(id);
+  } });
+  let gestion = null;
+  if (state.puedeGestionar) {
+    const sE = h("select", {}, Object.keys(TK_ESTADO).map((v) => { const o = h("option", { value: v, text: v === "en revision" ? "En revisión" : v[0].toUpperCase() + v.slice(1) }); if (t.estado === v) o.selected = true; return o; }));
+    const sP = h("select", {}, Object.entries(TK_PRIOR).map(([v, l]) => { const o = h("option", { value: v, text: l }); if (t.prioridad === v) o.selected = true; return o; }));
+    const res = h("textarea", { rows: 2, maxlength: 5000, placeholder: "Resolución (qué se hizo)" }); res.value = t.resolucion || "";
+    const gmsg = h("span", { class: "muted" });
+    gestion = h("section", { class: "gestion" }, h("h3", { text: "Gestión" }),
+      h("div", { class: "tkform" }, h("label", { class: "field" }, h("span", { text: "Estado" }), sE), h("label", { class: "field" }, h("span", { text: "Prioridad" }), sP),
+        h("label", { class: "field full" }, h("span", { text: "Resolución" }), res)),
+      h("div", { class: "toolbar" }, h("button", { class: "btn primary", type: "button", text: "Guardar", onclick: async () => {
+        const { data: ses } = await sb.auth.getSession();
+        const cierra = sE.value === "resuelto" || sE.value === "rechazado";
+        const upd = { estado: sE.value, prioridad: sP.value, resolucion: res.value.trim() || null, actualizado_por_email: ses.session?.user?.email,
+          cerrado_at: cierra ? (t.cerrado_at || new Date().toISOString()) : null, resuelto_en_version: sE.value === "resuelto" ? (t.resuelto_en_version || APP.version) : t.resuelto_en_version };
+        const { error: e3 } = await sb.from("tickets").update(upd).eq("id", id);
+        if (e3) { gmsg.className = "err"; gmsg.textContent = e3.message; return; }
+        dlg.close(); abrirTicket(id); if (state.tab === "tickets") render();
+      } }), gmsg));
+  }
+  cuerpo.replaceChildren(
+    h("h3", { text: t.asunto }), kv,
+    t.detalle ? h("div", { class: "pre", style: "margin-top:10px", text: t.detalle }) : null,
+    (t.capturas || []).length ? h("section", {}, h("h3", { text: "Capturas" }), caps) : null,
+    h("section", {}, h("h3", { text: "Historial" }), hist),
+    state.esUsuarioApp ? h("section", {}, txt, h("div", { class: "toolbar", style: "margin-top:6px" }, comentar, msg)) : null,
+    gestion);
+}
+
+/* ===================== Render ===================== */
+let ultimo = null;
+async function render() {
+  try { await renderInterno(); }
+  catch (e) {
+    registrarError("render", e); main().classList.remove("loading");
+    main().replaceChildren(vacio("Algo falló al mostrar esta pantalla", (e && e.message) || String(e),
+      h("div", { class: "toolbar", style: "justify-content:center" }, h("button", { class: "btn", text: "Reintentar", onclick: () => render() }), h("button", { class: "btn primary", text: "Reportarlo en Tickets", onclick: () => { tkUI.form.tipo = "error"; tkUI.form.asunto = "Error al mostrar " + state.tab; irA("tickets"); } }))));
+  }
+}
+async function renderInterno() {
+  escribirHash();
+  // tabs
+  for (const b of document.querySelectorAll("#tabs button")) b.setAttribute("aria-selected", String(b.dataset.tab === state.tab));
+  // filtros
+  for (const b of document.querySelectorAll("#segPeriodo button")) b.setAttribute("aria-pressed", String(b.dataset.p === state.periodo));
+  $("#customRange").classList.toggle("hidden", state.periodo !== "custom");
+  $("#fCanal").value = state.canal;
+  renderChips();
+  const enInicio = state.tab === "inicio" || state.tab === "datos" || state.tab === "tickets";
+  $("#segPeriodo").parentElement.style.opacity = enInicio ? 0.45 : 1;
+  $("#fCanal").parentElement.style.opacity = enInicio ? 0.45 : 1;
+  $("#segPeriodo").parentElement.title = enInicio ? "El período y el canal aplican a Resumen, Mensual y Diario." : "";
+
+  const m = main();
+  if (state.tab === "datos") { m.replaceChildren(...vistaDatos()); return; }
+  if (state.tab === "tickets") { m.replaceChildren(...vistaTickets()); return; }
+  if (enInicio) { m.replaceChildren(...vistaInicio()); return; }
+  if (!state.seleccion.length) {
+    m.replaceChildren(vacio("Elegí uno o más SKUs", "Tildalos en Inicio o buscalos con \"Agregar SKU\" arriba.", h("button", { class: "btn primary", onclick: () => irA("inicio"), text: "Ir a Inicio" })));
+    return;
+  }
+  m.classList.add("loading");
+  try { await asegurarDatos(state.seleccion); }
+  catch (e) { m.classList.remove("loading"); m.replaceChildren(vacio("No se pudieron traer los datos", e.message || String(e))); return; }
+  m.classList.remove("loading");
+  const r = calcular();
+  ultimo = r;
+  if (!r.hayDatos) { m.replaceChildren(vacio("Sin ventas", "No hay ventas para estos SKUs con el canal elegido.")); return; }
+  const vista = { resumen: vistaResumen, mensual: vistaMensual, diario: vistaDiario }[state.tab] || vistaResumen;
+  m.replaceChildren(...vista(r).filter(Boolean));
+}
+function irA(tab) { state.tab = tab; render(); scrollTo({ top: 0 }); }
+function toggleSku(sku, on) {
+  const i = state.seleccion.indexOf(sku);
+  if (on && i < 0) {
+    // elegir un base incluye todas sus presentaciones: se sacan las que ya estaban sueltas
+    if (esBase(sku)) state.seleccion = state.seleccion.filter((k) => esBase(k) || baseDe(k) !== sku);
+    state.seleccion.push(sku);
+  }
+  if (!on && i >= 0) { state.seleccion.splice(i, 1); state.colorDe.delete(sku); }
+  render();
+}
+function renderChips() {
+  const c = $("#chips"); c.textContent = "";
+  for (const k of state.seleccion) {
+    c.append(h("span", { class: "chip", title: k + (nombreSku(k) ? "\n" + nombreSku(k) : "") },
+      h("span", { class: "dot", style: `background:${colorSku(k)}` }), h("span", { class: "t" }, h("b", { text: k })),
+      h("button", { "aria-label": "Quitar " + k, text: "×", onclick: () => toggleSku(k, false) })));
+  }
+  $("#btnClear").classList.toggle("hidden", state.seleccion.length < 2);
+}
+
+/* ===================== Buscador de SKUs ===================== */
+function initPicker() {
+  const inp = $("#pickInput"), list = $("#pickList");
+  const MAX_OPC = 60;
+  let opts = [], act = 0, total = 0;
+  const sinEsp = (x) => x.toLowerCase().replace(/\s+/g, "");
+  const elegido = (k) => state.seleccion.includes(k);
+  // tildar / destildar sin cerrar la lista ni borrar lo que escribiste
+  const alternar = (k) => {
+    if (elegido(k)) { state.seleccion.splice(state.seleccion.indexOf(k), 1); state.colorDe.delete(k); }
+    else state.seleccion.push(k);
+    render(); pintar();
+  };
+  const alternarTodos = () => {
+    const todos = opts.every((o) => elegido(o.key));
+    for (const o of opts) {
+      if (todos && elegido(o.key)) { state.seleccion.splice(state.seleccion.indexOf(o.key), 1); state.colorDe.delete(o.key); }
+      if (!todos && !elegido(o.key)) state.seleccion.push(o.key);
+    }
+    render(); pintar();
+  };
+  const pintar = () => {
+    list.textContent = "";
+    if (!opts.length) { list.classList.toggle("hidden", !inp.value.trim()); if (inp.value.trim()) list.append(h("div", { class: "pick-head muted", text: "Sin coincidencias" })); return; }
+    const nSel = opts.filter((o) => elegido(o.key)).length;
+    const todos = nSel === opts.length;
+    list.append(h("div", { class: "pick-head" },
+      h("span", { class: "muted", text: `${total > opts.length ? `${opts.length} de ${nf0.format(total)}` : nf0.format(opts.length)} coincidencia${opts.length === 1 ? "" : "s"} · ${nSel} tildada${nSel === 1 ? "" : "s"}` }),
+      opts.length > 1 ? h("button", { type: "button", class: "btn sm ghost", onmousedown: (e) => { e.preventDefault(); alternarTodos(); }, text: todos ? "Destildar todas" : "Tildar todas" }) : null,
+      h("button", { type: "button", class: "btn sm", onmousedown: (e) => { e.preventDefault(); cerrar(); }, text: "Listo" })));
+    opts.forEach((o, i) => {
+      const chk = h("input", { type: "checkbox", tabindex: -1, "aria-hidden": "true" }); chk.checked = elegido(o.key);
+      const b = h("button", { type: "button", class: "pick-opt" + (i === act ? " act" : "") + (chk.checked ? " on" : ""), role: "option", "aria-selected": String(chk.checked),
+        onmousedown: (e) => { e.preventDefault(); act = i; alternar(o.key); } },
+        chk, h("span", { class: "pk" }, h("span", { class: "sku", text: o.label }), o.nombre ? h("span", { class: "nm", text: o.nombre }) : null), h("span", { class: "muted", text: o.sub }));
+      list.append(b);
+    });
+    list.classList.remove("hidden");
+    const a = list.querySelector(".pick-opt.act"); if (a) a.scrollIntoView({ block: "nearest" });
+  };
+  const buscar = () => {
+    const q = inp.value.trim().toLowerCase(), qs = sinEsp(q);
+    if (!q) { opts = []; total = 0; pintar(); return; }
+    const exact = [], pref = [], cont = [];
+    const op = (c) => ({ key: c.sku_base, label: c.sku_base, nombre: c.titulo || "", u: c.unid_90, sub: fN(c.unid_30) + " u/30d" });
+    for (const c of state.catalogo) {
+      const k = c.sku_base.toLowerCase();
+      if (k === q || sinEsp(k) === qs) exact.push(op(c));
+      else if (k.startsWith(q) || sinEsp(k).startsWith(qs)) pref.push(op(c));
+      else if (k.includes(q) || sinEsp(k).includes(qs) || (c.titulo || "").toLowerCase().includes(q)) cont.push(op(c));
+    }
+    const byU = (a, b) => b.u - a.u;
+    const todas = [...exact, ...pref.sort(byU), ...cont.sort(byU)];
+    total = todas.length; opts = todas.slice(0, MAX_OPC); act = 0; pintar();
+  };
+  const cerrar = () => { list.classList.add("hidden"); inp.value = ""; opts = []; inp.blur(); };
+  inp.addEventListener("input", buscar);
+  inp.addEventListener("focus", buscar);
+  inp.addEventListener("blur", () => setTimeout(() => list.classList.add("hidden"), 150));
+  inp.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowDown") { act = Math.min(opts.length - 1, act + 1); pintar(); e.preventDefault(); }
+    else if (e.key === "ArrowUp") { act = Math.max(0, act - 1); pintar(); e.preventDefault(); }
+    else if (e.key === "Enter" && opts[act]) { alternar(opts[act].key); e.preventDefault(); }
+    else if (e.key === "Escape") { cerrar(); }
+  });
+}
+
+/* ===================== Exportar Excel ===================== */
+async function exportar() {
+  if (!window.XLSX) { alert("La librería de Excel todavía está cargando. Probá de nuevo en unos segundos."); return; }
+  if (!state.seleccion.length) { irA("inicio"); return; }
+  try { await asegurarDatos(state.seleccion); } catch (e) { alert("No se pudieron traer los datos: " + (e.message || e)); return; }
+  const r = calcular();
+  const wb = XLSX.utils.book_new();
+  const skus = state.seleccion;
+  const res = [
+    ["Rotación · " + skus.join(" + ")],
+    ["Canal", state.canal === "todos" ? "Todos" : state.canal],
+    ["Período", `${r.desde} a ${r.fin}`],
+    [],
+    ["Unidades vendidas", r.tot.uv],
+    ...r.porSku.map((p) => ["   " + p.sku, p.uv]),
+    ["Ventas (órdenes)", r.tot.ven],
+    ["Unidades no válidas", r.tot.unv],
+    ["Ingreso bruto ($)", Math.round(r.tot.ing)],
+    ["Unid./día 30 d", +r.v30.toFixed(2)], ["Unid./día 60 d", +r.v60.toFixed(2)], ["Unid./día 90 d", +r.v90.toFixed(2)],
+    ["Proyección mensual", Math.round(r.v30 * 30)],
+    ["Días sin venta últimos 90", Math.max(0, r.sinVenta90)],
+    ["Racha más larga sin ventas", r.rachaMax],
+    [],
+    ["Lectura rápida"], ...insights(r).map(([, , t]) => ["• " + t]),
+    [],
+    ["Venta válida: excluye " + NO_VALIDAS_TXT + ". SKU = campo completo; unidades tal cual se vendieron. ARS nominales."],
+  ];
+  const ws1 = XLSX.utils.aoa_to_sheet(res); ws1["!cols"] = [{ wch: 48 }, { wch: 16 }];
+  const multi = skus.length <= 12;
+  const mens = [["Mes", ...(multi ? skus.map((k) => "Unid. " + etiquetaSku(k)) : []), "Unid. total", "Ventas", "No válidas", "Días con venta", "Días del período", "Unid./día", "Ingreso bruto", "Precio prom.", "Cargos ML %"],
+    ...r.meses.map((m) => [fMes(m.mes), ...(multi ? skus.map((k) => m.porSku[k] || 0) : []), m.uv, m.ven, m.unv, m.diasVenta, m.diasPer, +(m.uv / m.diasPer).toFixed(2), Math.round(m.ing), m.uv ? Math.round(m.ing / m.uv) : 0, m.ingML ? +(m.car / m.ingML).toFixed(4) : 0])];
+  const diar = [["Fecha", ...(multi ? skus.map((k) => "Unid. " + etiquetaSku(k)) : []), "Unid. total", "Ventas", "No válidas", "Ingreso bruto", "Cargos ML", "Ingreso neto", "Días seguidos sin venta"],
+    ...r.dias.map((d) => [d.fecha, ...(multi ? skus.map((k) => d.porSku[k] || 0) : []), d.uv, d.ven, d.unv, Math.round(d.ing), Math.round(d.car), Math.round(d.ing - d.car), d.racha])];
+  XLSX.utils.book_append_sheet(wb, ws1, "Resumen");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(mens), "Mensual");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(diar), "Diario");
+  XLSX.writeFile(wb, `Rotacion_${skus.slice(0, 5).join("-")}${skus.length > 5 ? "-etc" : ""}_${r.fin}.xlsx`);
+}
+
+/* ===================== Arranque ===================== */
+async function entrar() {
+  $("#login").classList.add("hidden");
+  $("#app").classList.remove("hidden");
+  main().replaceChildren(h("div", { class: "card empty" }, h("p", { text: "Cargando catálogo…" })));
+  const { data: ok, error } = await sb.rpc("puede_ver_rotacion");
+  if (error || !ok) {
+    main().replaceChildren(vacio("Sin permiso", "Tu usuario no tiene acceso a Rotación. Pedile a gerencia que lo habilite (permiso ver_rotacion).", h("button", { class: "btn", onclick: salir, text: "Salir" })));
+    return;
+  }
+  try { await cargarCatalogo(); }
+  catch (e) { main().replaceChildren(vacio("No se pudo cargar el catálogo", e.message || String(e))); return; }
+  sb.rpc("puede_importar_ventas").then(({ data }) => { state.puedeImportar = data === true; if (state.tab === "datos") render(); });
+  Promise.all([sb.rpc("es_usuario_app"), sb.rpc("puede_gestionar_tickets")]).then(([a, g]) => {
+    state.esUsuarioApp = a.data === true; state.puedeGestionar = g.data === true; if (state.tab === "tickets") render();
+  });
+  state.seleccion = state.seleccion.filter((k) => esBase(k) || state.presMap.has(codeOf(k)));
+  render();
+}
+function mostrarLogin() { $("#app").classList.add("hidden"); $("#login").classList.remove("hidden"); $("#lEmail").focus(); }
+async function salir() { await sb.auth.signOut(); state.cache.clear(); mostrarLogin(); }
+
+$("#loginForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const btn = $("#lBtn"); btn.disabled = true; $("#lErr").textContent = "";
+  const { error } = await sb.auth.signInWithPassword({ email: $("#lEmail").value.trim(), password: $("#lPass").value });
+  btn.disabled = false;
+  if (error) { $("#lErr").textContent = /invalid/i.test(error.message) ? "Email o contraseña incorrectos." : error.message; return; }
+  entrar();
+});
+$("#btnLogout").addEventListener("click", salir);
+$("#btnExport").addEventListener("click", exportar);
+$("#btnAyuda").addEventListener("click", mostrarFuncionamiento);
+$("#versionTxt").textContent = "versión " + APP.version;
+$("#btnClear").addEventListener("click", () => { state.seleccion = []; state.colorDe.clear(); render(); });
+$("#tabs").addEventListener("click", (e) => { const b = e.target.closest("button[data-tab]"); if (b) irA(b.dataset.tab); });
+$("#segPeriodo").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-p]"); if (!b) return;
+  state.periodo = b.dataset.p;
+  if (state.periodo === "custom") { const r = ultimo || {}; if (!state.desde) state.desde = r.desde || iso(dn(hoyAR()) - 90); if (!state.hasta) state.hasta = r.fin || iso(dn(hoyAR()) - 1); $("#fDesde").value = state.desde; $("#fHasta").value = state.hasta; }
+  render();
+});
+$("#fDesde").addEventListener("change", (e) => { state.desde = e.target.value || null; render(); });
+$("#fHasta").addEventListener("change", (e) => { state.hasta = e.target.value || null; render(); });
+$("#fCanal").addEventListener("change", (e) => { state.canal = e.target.value; render(); });
+let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => { if (state.tab === "mensual" || state.tab === "diario") render(); }, 200); });
+
+initPicker();
+leerHash();
+if (state.periodo === "custom") { $("#fDesde").value = state.desde || ""; $("#fHasta").value = state.hasta || ""; }
+sb.auth.getSession().then(({ data }) => (data.session ? entrar() : mostrarLogin()));
+sb.auth.onAuthStateChange((ev) => { if (ev === "SIGNED_OUT") mostrarLogin(); });
+</script>
+</body>
+</html>
