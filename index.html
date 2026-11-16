@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>VENTAS · Gráfica Límite</title>
+<title>Rotación · Gráfica Límite</title>
 <meta name="robots" content="noindex, nofollow">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
@@ -359,7 +359,7 @@ tr.clic { cursor: pointer; }
 const SUPABASE_URL = "https://mdupatknzanlxuwbcost.supabase.co";
 const SUPABASE_KEY = "sb_publishable_xfBKHMueEurDtbpjO8cpwQ_WzCke0JP";
 const TZ = "America/Argentina/Buenos_Aires";
-const NO_VALIDAS_TXT = "canceladas, devueltas, no entregadas y pagos pendientes/fallidos";
+const NO_VALIDAS_TXT = "canceladas, devueltas, no entregadas y pagos fallidos (o pendientes, salvo en Tienda Nube)";
 
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
 
@@ -410,7 +410,7 @@ const ICON = {
 function tag(kind, cls, label) { const t = h("span", { class: "tag " + cls }); t.innerHTML = ICON[kind]; t.append(document.createTextNode(label)); return t; }
 
 /* ===================== Config de la app (un solo lugar para tocar) ===================== */
-const APP = { id: "grafica-rotacion", nombre: "Rotación de ventas", version: "2026-10-05.2" };
+const APP = { id: "grafica-rotacion", nombre: "Rotación de ventas", version: "2026-11-16.1" };
 const UMBRALES = {
   frenadoDias: 14,   // días sin vender (habiendo vendido en 90 d) para marcar "Frenado"
   caida: -0.30,      // velocidad 30 d vs 90 d para "En caída"
@@ -1175,7 +1175,8 @@ const BUCKET = "ventas-ml-reportes";
 const FUENTES = {
   api_ml: ["API Mercado Libre", "Sincronización automática cada 10 minutos (últimos 12 meses en adelante)."],
   reportes_ml: ["Reportes Excel de ML", "Históricos subidos al bucket (desde 2024). Se completan con la API donde se pisan."],
-  tienda_online: ["Tienda online", "Exports de pedidos (CSV o XLSX) importados acá abajo."],
+  tienda_online: ["Tienda online (Prestashop)", "Histórico hasta el 31/10/2026: exports de pedidos (CSV o XLSX) importados acá abajo."],
+  tiendanube_api: ["Tienda Nube (API)", "Pedidos desde el 1/11/2026, automáticos: entran al instante cuando Tienda Nube avisa y, de respaldo, cada 10 minutos."],
   agregado_app: ["Agregado de la app", "Resumen por día y presentación que lee esta app. Se recalcula cada 10 min (y al importar)."],
 };
 const ESTADO_ARCH = {
@@ -1188,7 +1189,43 @@ const fBytes = (b) => (!b ? "–" : b > 1048576 ? nf1.format(b / 1048576) + " MB
 const fDT = (t) => (t ? new Date(t).toLocaleString("es-AR", { timeZone: TZ, day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" }) : "–");
 const datosUI = { filtro: "todos", log: [] };
 
+/* ---- Conexión con Tienda Nube (estado del sync automático) ---- */
+const TN_WEBHOOKS_TOTAL = 6; // order/created, updated, paid, cancelled, edited + app/uninstalled
+const AYUDA_TN = {
+  estado: "Si Tienda Nube está conectada a la base de ventas. Sale de la app privada \"Gráfica Límite – Ventas\" instalada en la tienda, con un solo permiso: leer pedidos. \"Atrasada\" = más de 30 minutos sin sincronizar bien. \"Con error\": el detalle aparece abajo.",
+  ultima: "Fecha y hora de la última sincronización que terminó bien. Se sincroniza al instante cuando Tienda Nube avisa de un pedido nuevo o modificado y, de respaldo, cada 10 minutos. Todas las noches se revisa todo desde el 1/11/2026.",
+  pedidos: "Pedidos leídos (nuevos o modificados) en la última sincronización. Cada corrida relee los últimos 30 minutos por seguridad, así que un mismo pedido puede contarse en varias corridas sin duplicarse en la base.",
+  avisos: `Avisos automáticos (webhooks) registrados en Tienda Nube: pedido creado, actualizado, pagado, cancelado y editado, y app desinstalada. Con ${TN_WEBHOOKS_TOTAL} de ${TN_WEBHOOKS_TOTAL}, los pedidos entran al instante; si falta alguno, igual entran con el sync cada 10 minutos.`,
+};
+const haceTxt = (min) => (min < 1 ? "menos de 1 min" : min < 60 ? `${min} min` : min < 1440 ? `${Math.round(min / 60)} h` : `${Math.round(min / 1440)} días`);
+const tileTN = (k, v, d, ay) => h("div", { class: "tile" },
+  h("div", { class: "k" }, k, ayuda(ay)),
+  typeof v === "string" ? h("div", { class: "v", style: "font-size:20px", text: v }) : h("div", { class: "v", style: "font-size:20px" }, v),
+  h("div", { class: "d", text: d }));
+
+function cajaTN(data) {
+  const x = Array.isArray(data) ? data[0] : data;
+  if (!x || !x.conectada) {
+    return h("div", { class: "tiles", style: "margin:0" },
+      tileTN("Estado", tag("off", "neutral", "No conectada"), "Falta instalar la app en Tienda Nube. Avisale a gerencia.", AYUDA_TN.estado));
+  }
+  const min = x.ultimo_ok_at ? Math.max(0, Math.round((Date.now() - new Date(x.ultimo_ok_at).getTime()) / 60000)) : null;
+  const estado = x.ultimo_error ? tag("stop", "bad", "Con error") : min === null || min > 30 ? tag("off", "warn", "Atrasada") : tag("ok", "good", "Conectada");
+  const wh = Number(x.webhooks_activos) || 0;
+  return h("div", {},
+    h("div", { class: "tiles", style: "margin:0" },
+      tileTN("Estado", estado, `Tienda ${x.store_id} · conectada el ${fDT(x.conectada_at)}`, AYUDA_TN.estado),
+      tileTN("Última sincronización", min === null ? "–" : `hace ${haceTxt(min)}`, x.ultimo_ok_at ? fDT(x.ultimo_ok_at) : "todavía no corrió", AYUDA_TN.ultima),
+      tileTN("Pedidos leídos (última corrida)", nf0.format(Number(x.pedidos_ultima_corrida) || 0), "nuevos o modificados", AYUDA_TN.pedidos),
+      tileTN("Avisos instantáneos", `${wh} de ${TN_WEBHOOKS_TOTAL}`, wh >= TN_WEBHOOKS_TOTAL ? "todos activos" : "faltan: entran igual cada 10 min", AYUDA_TN.avisos)),
+    x.ultimo_error ? h("p", { class: "err", style: "margin:10px 0 0", text: "Último error: " + x.ultimo_error }) : null);
+}
+
 function vistaDatos() {
+  const tnBox = h("div", {}, h("p", { class: "sub", style: "padding:10px 0", text: "Cargando…" }));
+  sb.rpc("tn_estado_app").then(
+    ({ data, error }) => tnBox.replaceChildren(error ? h("p", { class: "err", text: "No se pudo leer el estado de Tienda Nube: " + error.message }) : cajaTN(data)),
+    (e) => tnBox.replaceChildren(h("p", { class: "err", text: "No se pudo leer el estado de Tienda Nube: " + (e?.message || e) })));
   const fuentesBox = h("div", { class: "tbl-wrap" }, h("p", { class: "sub", style: "padding:10px", text: "Cargando…" }));
   const archBox = h("div", { class: "tbl-wrap" }, h("p", { class: "sub", style: "padding:10px", text: "Cargando…" }));
   const seg = h("div", { class: "seg" }, [["todos", "Todos"], ["tienda_online", "Tienda online"], ["reporte_ml", "Reportes ML"]].map(([v, t]) =>
@@ -1216,7 +1253,10 @@ function vistaDatos() {
     $("#archCount") && ($("#archCount").textContent = `${nf0.format(lista.length)} archivo${lista.length === 1 ? "" : "s"}`);
   })();
 
-  const out = [];
+  const out = [h("div", { class: "card" },
+    h("h2", { text: "Tienda Nube: conexión automática" }),
+    h("p", { class: "sub", text: "Desde el 1/11/2026 los pedidos de la tienda entran solos. No hay que exportar ni subir nada." }),
+    tnBox)];
   if (state.puedeImportar) {
     const input = h("input", { type: "file", accept: ".csv,.xlsx", multiple: true, class: "hidden", onchange: (e) => subirArchivos([...e.target.files]) });
     const zona = h("div", { class: "drop", tabindex: 0, role: "button", "aria-label": "Elegir archivos para importar", onclick: () => input.click(), onkeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); input.click(); } } },
@@ -1225,13 +1265,13 @@ function vistaDatos() {
     zona.addEventListener("dragleave", () => zona.classList.remove("over"));
     zona.addEventListener("drop", (e) => { e.preventDefault(); zona.classList.remove("over"); subirArchivos([...e.dataTransfer.files]); });
     out.push(h("div", { class: "card" },
-      h("h2", { text: "Importar ventas de tienda online" }),
-      h("p", { class: "sub", text: "Export de pedidos de la tienda (mismas columnas que siempre: Fecha de Alta, Referencia del Pedido, Referencia de Producto, Estatus, Cantidad…). Si subís un archivo que se pisa con otro (ej. el mes completo después de uno parcial), los pedidos se actualizan: no se duplican." }),
+      h("h2", { text: "Importar histórico de Prestashop" }),
+      h("p", { class: "sub", text: "Solo para pedidos de Prestashop (hasta el 31/10/2026), con las columnas de siempre: Fecha de Alta, Referencia del Pedido, Referencia de Producto, Estatus, Cantidad… Las ventas de Tienda Nube no se suben acá: entran solas. Si subís un archivo que se pisa con otro, los pedidos se actualizan; no se duplican." }),
       zona,
       datosUI.log.length ? h("ul", { class: "upl" }, datosUI.log.map((l) => h("li", {}, (ESTADO_ARCH[l.estado] || (() => tag("off", "neutral", "")))(), h("b", { text: l.nombre }), h("span", { class: l.estado === "error" ? "err" : "ink2", text: l.msg })))) : null));
   }
   out.push(
-    h("div", { class: "card" }, h("h2", { text: "Fuentes de datos" }), h("p", { class: "sub", text: "Qué hay cargado de cada origen. La app suma Mercado Libre (API + reportes, sin duplicar) y tienda online." }), fuentesBox),
+    h("div", { class: "card" }, h("h2", { text: "Fuentes de datos" }), h("p", { class: "sub", text: "Qué hay cargado de cada origen. La app suma Mercado Libre (API + reportes, sin duplicar), Tienda Nube (API) y el histórico de Prestashop." }), fuentesBox),
     h("div", { class: "card" },
       h("div", { class: "card-head" }, h("div", {}, h("h2", { text: "Archivos leídos" }), h("p", { class: "sub", id: "archCount", text: "" })), seg),
       archBox));
@@ -1280,8 +1320,9 @@ const FUNCIONAMIENTO = [
   ["De dónde salen los datos", [
     "• API de Mercado Libre: se sincroniza sola cada 10 minutos.",
     "• Reportes Excel de ML: el histórico desde enero 2024 (cargado una vez). Donde se pisa con la API, manda la API y no se duplica.",
-    "• Tienda online: los exports de pedidos (CSV o XLSX) que se suben en la pestaña Datos.",
-    "• La app lee un resumen por día y SKU que se recalcula cada 10 minutos (y al importar un archivo). La hora de la última actualización está arriba a la derecha.",
+    "• Tienda online desde el 1/11/2026: Tienda Nube, automática. Cada pedido nuevo o que cambia de estado entra al instante (y, de respaldo, cada 10 minutos). El estado de la conexión está en la pestaña Datos.",
+    "• Tienda online hasta el 31/10/2026: Prestashop, con los exports de pedidos (CSV o XLSX) que se subieron en la pestaña Datos.",
+    "• La app lee un resumen por día y SKU que se recalcula cada 10 minutos (y al entrar pedidos de Tienda Nube o importar un archivo). La hora de la última actualización está arriba a la derecha.",
   ]],
   ["Qué es un SKU acá", [
     "El campo SKU completo, tal cual está en Mercado Libre o en la tienda (ej. \"208 A - T DYE Global-250ml - AMARILLO\"). Cada texto distinto es un SKU distinto.",
@@ -1289,8 +1330,8 @@ const FUNCIONAMIENTO = [
     "Si un mismo producto se cargó con textos distintos (ej. dos variantes del 934), aparece partido: elegí los dos para verlo junto.",
   ]],
   ["Venta válida y no válida", [
-    "Válida: no cancelada, no devuelta, no \"no entregada\" y con el pago acreditado. En tienda, \"Retira – Paga al retirar\" cuenta como válida.",
-    "No válida: cancelada, devuelta, no entregada, en espera de pago o con error de pago. Se muestra aparte y no cuenta para la rotación.",
+    "Válida: no cancelada, no devuelta, no \"no entregada\" y con el pago acreditado. En tienda, \"Paga al retirar\" cuenta como válida, y en Tienda Nube también el pago pendiente (si después se cancela, se descuenta solo).",
+    "No válida: cancelada, devuelta, no entregada o con error de pago (en Prestashop, también \"en espera de pago\"). Se muestra aparte y no cuenta para la rotación.",
   ]],
   ["Filtros de arriba", [
     "• Si no elegís ningún SKU, Resumen, Mensual y Diario muestran el total de todos los SKUs juntos (sin reposición, que es por producto).",
@@ -1317,8 +1358,9 @@ const FUNCIONAMIENTO = [
     `En Diario, las bandas y filas rojas son ${UMBRALES.rachaDias} o más días seguidos sin venta: probables quiebres de stock o publicaciones pausadas.`,
   ]],
   ["Pestaña Datos", [
-    "Qué hay cargado de cada fuente, la lista de archivos leídos con su estado y la importación de ventas de tienda online.",
-    "Importar: arrastrá el export de pedidos (CSV o XLSX) y esperá el \"Listo\". Si un archivo se pisa con otro (ej. el mes completo después de un parcial), los pedidos se actualizan, no se duplican. Solo usuarios con permiso de importación.",
+    "Arriba, el estado de la conexión con Tienda Nube: si está conectada, cuándo sincronizó por última vez y si los avisos instantáneos están activos. Si dice \"Atrasada\" o \"Con error\", avisale a gerencia o cargá un ticket.",
+    "Después: qué hay cargado de cada fuente, la lista de archivos leídos con su estado y la importación del histórico de Prestashop.",
+    "Importar (solo Prestashop, hasta el 31/10/2026): arrastrá el export de pedidos (CSV o XLSX) y esperá el \"Listo\". Si un archivo se pisa con otro, los pedidos se actualizan; no se duplican. Solo usuarios con permiso de importación. Las ventas de Tienda Nube no se suben: entran solas.",
   ]],
   ["Pestaña 🎫 Tickets", [
     "Para reportar un error, proponer una mejora o hacer una consulta sobre la app. Podés adjuntar hasta 3 capturas (o pegarlas con Ctrl+V en el detalle).",
