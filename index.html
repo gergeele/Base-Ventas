@@ -439,7 +439,7 @@ const ICON = {
 function tag(kind, cls, label) { const t = h("span", { class: "tag " + cls }); t.innerHTML = ICON[kind]; t.append(document.createTextNode(label)); return t; }
 
 /* ===================== Config de la app (un solo lugar para tocar) ===================== */
-const APP = { id: "grafica-rotacion", nombre: "Rotación de ventas", version: "2026-11-26.3" };
+const APP = { id: "grafica-rotacion", nombre: "Rotación de ventas", version: "2026-11-27.1" };
 const UMBRALES = {
   frenadoDias: 14,   // días sin vender (habiendo vendido en 90 d) para marcar "Frenado"
   caida: -0.30,      // velocidad 30 d vs 90 d para "En caída"
@@ -466,13 +466,14 @@ const MP_CFG = {
   libro: "ver. octubre 2022 - tabla precios productos  - .xlsx",
   libroParcial: "ver. octubre",                       // si el nombre exacto no está abierto, se busca un libro que contenga esto
   timeoutSaludMs: 15000, timeoutLecturaMs: 40000,
+  maxColsAgente: 10,                                  // el agente (v1.0.1, MaxColumnas) acepta hasta 10 columnas por pedido: si hacen falta más, se lee en tandas
   autoDetectarCadaMin: 5,                             // al entrar a la pestaña, vuelve a leer el Excel si pasaron más de N minutos
   minFilasProductos: 50,                              // si se leen menos SKUs, se asume hoja equivocada y no se compara
   ignorarSku: [/^0 - /],                              // filas de control (ej. "0 - FECHA ACTUALIZACION DE PRECIOS")
-  productos: { hoja: "BASE GENERAL", fila: 2, obligatorias: ["codigo_mp", "sku", "unid_total", "division", "cant_padre"], cols: {
+  productos: { hoja: "BASE GENERAL", fila: 2, clave: "sku", obligatorias: ["codigo_mp", "sku", "unid_total", "division", "cant_padre"], cols: {
     codigo_mp: ["codigo mat prima"], sku: ["sku"], tipo: ["tipo producto"],
     unid_total: ["cant. unidades total", "cant unidades total"], division: ["division cantidad del padre"], cant_padre: ["cantidad del padre"] } },
-  materias: { hoja: "MATERIA PRIMA", fila: 2, obligatorias: ["codigo", "sku", "padre1", "div1"],
+  materias: { hoja: "MATERIA PRIMA", fila: 2, clave: "codigo", obligatorias: ["codigo", "sku", "padre1", "div1"],
     recomendadas: ["unid_bulto", "es_plana"],                // si faltan, se guarda igual pero queda un aviso (y el consumo en MP dice "dudoso")
     cols: {
     codigo: ["codigo"], sku: ["sku"], cant_minima: ["cantidad minima indivicible", "cantidad minima indivisible"], unidad: ["unidad"],
@@ -1893,10 +1894,37 @@ async function leerHojaMP(libro, def) {
   const enc = await agenteGet("/api/encabezados", { libro, hoja: def.hoja, fila: def.fila }, MP_CFG.timeoutLecturaMs);
   const col = MP.buscarColumnas(enc.encabezados, def);
   if (col.faltan.length) throw errMP("columnas", `En la hoja ${def.hoja} (fila ${def.fila}) no encuentro ${col.faltan.length > 1 ? "las columnas" : "la columna"} ${col.faltan.map((x) => `"${x}"`).join(", ")}. ¿Les cambiaron el nombre o se movió la fila de títulos?`);
-  const lect = await agenteGet("/api/leer", { libro, hoja: def.hoja, fila: def.fila, cols: [...new Set(Object.values(col.letras))].join(",") }, MP_CFG.timeoutLecturaMs);
+  const filas = await leerColumnasAgente(libro, def, [...new Set(Object.values(col.letras))], col.letras[def.clave]);
   const faltanRec = (def.recomendadas || []).filter((c) => !col.letras[c]).map((c) => ({ hoja: def.hoja, fila: def.fila, col: def.cols[c][0],
     efecto: c === "es_plana" ? "las planas no se distinguen (todas se calculan como no planas)." : "el consumo en materias primas queda \"dudoso\" en todas." }));
-  return { col, filas: lect.filas || [], faltanRec };
+  return { col, filas, faltanRec };
+}
+/** Lee columnas de una hoja con el agente. El agente acepta hasta MP_CFG.maxColsAgente columnas por pedido:
+    si hacen falta más, lee en tandas que repiten la columna clave y las une por número de fila.
+    El agente omite las filas vacías en las columnas pedidas, así que una fila puede faltar en una tanda
+    solo si su clave está vacía; si la clave no coincide entre tandas (alguien ordenó o filtró la hoja
+    mientras se leía), corta con un aviso en vez de mezclar datos de filas distintas. */
+async function leerColumnasAgente(libro, def, letras, clave) {
+  const resto = letras.filter((l) => l !== clave), porTanda = Math.max(1, MP_CFG.maxColsAgente - 1);
+  const tandas = [];
+  for (let i = 0; i === 0 || i < resto.length; i += porTanda) tandas.push([clave, ...resto.slice(i, i + porTanda)]);
+  const cambio = (fila) => errMP("excel_cambio", `La hoja ${def.hoja} cambió mientras se leía (fila ${fila}): ¿alguien la ordenó o filtró? Esperá a que termine y volvé a leer.`);
+  const k = (f) => String((f && f.v && f.v[clave]) ?? "").trim();
+  let base = null;
+  for (const t of tandas) {
+    const lect = await agenteGet("/api/leer", { libro, hoja: def.hoja, fila: def.fila, cols: t.join(",") }, MP_CFG.timeoutLecturaMs);
+    const filas = Array.isArray(lect.filas) ? lect.filas : [];
+    if (!base) { base = new Map(filas.map((f) => [f.fila, { fila: f.fila, v: { ...(f.v || {}) } }])); continue; }
+    const vistas = new Set();
+    for (const f of filas) {
+      vistas.add(f.fila);
+      const b = base.get(f.fila);
+      if (b ? k(b) !== k(f) : k(f) !== "") throw cambio(f.fila);
+      if (b) Object.assign(b.v, f.v || {}); else base.set(f.fila, { fila: f.fila, v: { ...(f.v || {}) } });
+    }
+    for (const b of base.values()) if (!vistas.has(b.fila) && k(b) !== "") throw cambio(b.fila);
+  }
+  return [...base.values()].sort((a, b) => a.fila - b.fila);
 }
 async function leerExcelMP() {
   const X = state.mp.excel;
