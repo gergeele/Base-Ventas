@@ -272,6 +272,11 @@ tr.clic { cursor: pointer; }
 .mp-excel-st { display: flex; gap: 10px; align-items: baseline; flex: 1; min-width: 260px; }
 .mp-excel-st .tag { flex: none; }
 .warnmsg { color: var(--warn); }
+/* consumo en materia prima: "dudoso" / "próximamente" */
+.pill { display: inline-block; font-size: 11px; font-weight: 700; line-height: 1.5; padding: 0 8px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; cursor: help; }
+.pill.warn { color: var(--warn); } .pill.neutral { color: var(--muted); }
+.tile .v .pill { font-size: 15px; padding: 2px 12px; vertical-align: middle; }
+td.num .mpsub { font-weight: 400; white-space: nowrap; }
 select.sel { padding: 6px 8px; border-radius: 8px; border: 1px solid var(--axis); background: var(--surface); }
 tr.clic:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
@@ -434,7 +439,7 @@ const ICON = {
 function tag(kind, cls, label) { const t = h("span", { class: "tag " + cls }); t.innerHTML = ICON[kind]; t.append(document.createTextNode(label)); return t; }
 
 /* ===================== Config de la app (un solo lugar para tocar) ===================== */
-const APP = { id: "grafica-rotacion", nombre: "Rotación de ventas", version: "2026-11-26.2" };
+const APP = { id: "grafica-rotacion", nombre: "Rotación de ventas", version: "2026-11-26.3" };
 const UMBRALES = {
   frenadoDias: 14,   // días sin vender (habiendo vendido en 90 d) para marcar "Frenado"
   caida: -0.30,      // velocidad 30 d vs 90 d para "En caída"
@@ -467,8 +472,12 @@ const MP_CFG = {
   productos: { hoja: "BASE GENERAL", fila: 2, obligatorias: ["codigo_mp", "sku", "unid_total", "division", "cant_padre"], cols: {
     codigo_mp: ["codigo mat prima"], sku: ["sku"], tipo: ["tipo producto"],
     unid_total: ["cant. unidades total", "cant unidades total"], division: ["division cantidad del padre"], cant_padre: ["cantidad del padre"] } },
-  materias: { hoja: "MATERIA PRIMA", fila: 2, obligatorias: ["codigo", "sku", "padre1", "div1"], cols: {
+  materias: { hoja: "MATERIA PRIMA", fila: 2, obligatorias: ["codigo", "sku", "padre1", "div1"],
+    recomendadas: ["unid_bulto", "es_plana"],                // si faltan, se guarda igual pero queda un aviso (y el consumo en MP dice "dudoso")
+    cols: {
     codigo: ["codigo"], sku: ["sku"], cant_minima: ["cantidad minima indivicible", "cantidad minima indivisible"], unidad: ["unidad"],
+    unid_bulto: ["unidades por paquete"],                    // col. L: unidades de consumo que trae 1 MP tal cual se compra
+    es_plana: ["es plana"],                                  // col. BO: 1 = resma/pliego que se corta (consumo en MP "próximamente" hasta cargar la merma)
     padre1: ["codigo 1"], div1: ["dividendo materia prima 1"], padre2: ["codigo 2"], div2: ["dividendo materia prima 2"],
     padre_corte: ["cod materia prima solo para pepeles cortados", "cod materia prima solo para papeles cortados"] } },
 };
@@ -543,21 +552,24 @@ const AYUDA = {
   "Cobertura de ventas con MP (90 d)": "Unidades vendidas en 90 días de SKUs con materia prima y factor completos ÷ total de unidades vendidas en 90 días. Si no llega al 100 %, el consumo de materia prima está subestimado: mirá \"SKUs vendidos sin materia prima\".",
   "SKUs vendidos sin materia prima (90 d)": "SKUs que vendieron en 90 días y no se pueden llevar a materia prima: no están en BASE GENERAL, no tienen \"codigo mat prima\", su materia prima no existe en la hoja MATERIA PRIMA o les falta un dato para el factor. Tocalo para ver la lista y pasársela a Stock.",
   "Copia del Excel": "Cuándo y quién guardó por última vez en la base la relación SKU → materia prima leída del Excel abierto. La app usa esa copia, así funciona en cualquier PC o celular sin el Excel abierto.",
-  "Materia prima": "Código y descripción de la hoja MATERIA PRIMA. Abajo: en qué unidad se mide su consumo (la columna Unidad, o paquetes de su \"Cantidad mínima indivisible\" si es mayor a 1) y, si es un corte o derivado, de qué materia prima sale.",
+  "Materia prima": "Código y descripción de la hoja MATERIA PRIMA. Abajo: cuánto trae 1 materia prima tal cual se compra (\"Unidades por Paquete\", en su unidad de consumo: la columna Unidad, o paquetes de su \"Cantidad mínima indivisible\" si es mayor a 1), si es plana y, si es un corte o derivado, de qué materia prima sale.",
   "SKUs con venta 90 d": "SKUs asociados (directos o por la cadena) con venta en los últimos 90 días / total de SKUs del Excel que usan esa materia prima.",
-  "Consumo 30 d": "Materia prima consumida por las ventas válidas de los últimos 30 días = Σ unidades vendidas de cada SKU × su factor. Factor directo = Cant. Unidades Total ÷ Division Cantidad del Padre ÷ Cantidad del Padre (BASE GENERAL). Por la cadena se divide además por el \"Dividendo materia prima\" de MATERIA PRIMA. Ej.: \"15 x5\" = 100 ÷ 1 ÷ 20 = 5 paquetes de la MP 339.",
-  "Consumo/día 30 d": "Consumo de los últimos 30 días ÷ 30.",
-  "Consumo 90 d": "Igual que el consumo de 30 días, para los últimos 90 días.",
+  "Consumo 30 d": "Materias primas (tal cual se compran) consumidas por las ventas válidas de los últimos 30 días = Σ unidades vendidas de cada SKU × su factor ÷ \"Unidades por Paquete\" (columna L de MATERIA PRIMA). Factor = Cant. Unidades Total ÷ Division Cantidad del Padre ÷ Cantidad del Padre (BASE GENERAL); por la cadena, además ÷ \"Dividendo materia prima\". Ej.: vender 1 \"15\" = 1 paquete de la 339; la 339 trae 50 paquetes → 0,02 MP. Abajo, chico: lo mismo en su unidad de consumo. \"próximamente\": es plana y falta cargar la merma. \"dudoso\": un dato del Excel no cierra (tocá la materia prima para ver cuál).",
+  "Consumo/día 30 d": "Consumo de los últimos 30 días ÷ 30, en materias primas (abajo, en su unidad de consumo).",
+  "Consumo 90 d": "Igual que el consumo de 30 días, para los últimos 90 días: en materias primas (abajo, en su unidad de consumo).",
+  "Materias primas dudosas (90 d)": "Materias primas con ventas en 90 días cuyo consumo en materias primas no es confiable: \"Unidades por Paquete\" (columna L de MATERIA PRIMA) vacía o no numérica, o un SKU de bulto cerrado (\"BC\") que no da 1 materia prima entera. Muestran \"dudoso\" (con su consumo en la unidad de consumo) hasta que Stock corrija el Excel y se vuelva a guardar. Tocalo para ver solo esas. Las planas no cuentan acá: dicen \"próximamente\".",
   "Tendencia MP": "Consumo de los últimos 30 días contra su promedio de 90 (+ más rápido, − más lento). Se muestra si los SKUs asociados vendieron 10 o más unidades en 90 días.",
   "Unid. vendidas 90 d": "Suma de unidades vendidas en 90 días de los SKUs asociados, tal cual se vendieron (mezcla presentaciones: un \"x5\" cuenta 1). Es solo referencia: para comprar mirá el consumo.",
   "Estado MP": `Frenado: hace ${UMBRALES.frenadoDias}+ días que no se vende ningún SKU asociado. En caída / En alza: el consumo de 30 días va ${Math.abs(UMBRALES.caida * 100)} % por debajo / ${UMBRALES.alza * 100} % por encima del promedio de 90.`,
-  "Proyección mensual de consumo": "Consumo por día de los últimos 30 días × 30: cuánto se consumiría en un mes si se sigue vendiendo a ese ritmo.",
+  "Proyección mensual de consumo": "Consumo por día de los últimos 30 días × 30: cuántas materias primas se consumirían en un mes si se sigue vendiendo a ese ritmo (abajo, en su unidad de consumo).",
   "Tendencia de consumo": "Consumo de los últimos 30 días contra su promedio de 90 días. Se muestra con 10 o más unidades vendidas en 90 días.",
   "SKUs asociados": "SKUs con venta en 90 días / total de SKUs del Excel que usan esta materia prima, directo o por la cadena.",
   "Vía": "Directa: el SKU tiene esta materia prima en \"codigo mat prima\". Si muestra una cadena (ej. 588 → 58), el SKU usa la 588, que sale de la 58.",
-  "MP por unidad vendida": "Cuánta materia prima consume 1 unidad vendida del SKU (el factor). \"sin factor\": falta un dato en el Excel y su consumo no se suma.",
+  "MP por unidad vendida": "Cuánta materia prima (tal cual se compra) consume 1 unidad vendida del SKU = factor ÷ \"Unidades por Paquete\". Ej.: 1 \"15\" = 1 paquete ÷ 50 = 0,02 MP de la 339. Abajo, el factor en su unidad de consumo. Si la materia prima es plana o dudosa, se muestra solo el factor en su unidad. \"sin factor\": falta un dato en el Excel y su consumo no se suma.",
   "% del consumo 90 d": "Parte del consumo de 90 días de esta materia prima que explica cada SKU.",
 };
+// el ranking de materias primas rotula las columnas con "(MP)": misma ayuda
+for (const k of ["Consumo 30 d", "Consumo/día 30 d", "Consumo 90 d"]) AYUDA[k + " (MP)"] = AYUDA[k];
 function ayuda(texto) {
   if (!texto) return null;
   const b = h("button", { class: "q", type: "button", "aria-label": "¿Qué es esto?", "aria-expanded": "false", text: "?" });
@@ -1457,6 +1469,14 @@ const MP = (() => {
     return { filas: out, ignoradas };
   }
 
+  /** Casilla de marca ("es plana"): 1 / sí / x = true; vacío o 0 = false. */
+  function esMarca(s) {
+    const v = normTxt(s);
+    if (!v) return false;
+    const n = num(v);
+    return n !== null ? n !== 0 : ["si", "x", "true", "verdadero"].includes(v);
+  }
+
   /** Filas de MATERIA PRIMA → materias primas. */
   function parsearMaterias(filas, letras) {
     const out = [], ignoradas = [];
@@ -1465,10 +1485,12 @@ const MP = (() => {
       const cod = codigo(crudo);
       if (!cod) { if (crudo) ignoradas.push({ fila: f.fila, codigo: crudo }); continue; }
       const padre = (c) => { const x = codigo(celda(f, letras, c)); return x && x !== cod ? x : null; };
+      const crudoL = celda(f, letras, "unid_bulto");
       out.push({
         codigo: cod, sku: celda(f, letras, "sku") || null, cant_minima: num(celda(f, letras, "cant_minima")), unidad: celda(f, letras, "unidad") || null,
+        unid_bulto: num(crudoL), es_plana: letras.es_plana ? esMarca(celda(f, letras, "es_plana")) : null,
         padre1: padre("padre1"), div1: num(celda(f, letras, "div1")), padre2: padre("padre2"), div2: num(celda(f, letras, "div2")),
-        padre_corte: padre("padre_corte"), fila: f.fila,
+        padre_corte: padre("padre_corte"), fila: f.fila, _crudoL: crudoL,
       });
     }
     return { filas: out, ignoradas };
@@ -1478,6 +1500,34 @@ const MP = (() => {
   function factorProducto(p) {
     const d = p.division === null || p.division === undefined ? 1 : p.division;
     return p.unid_total > 0 && d > 0 && p.cant_padre > 0 ? p.unid_total / d / p.cant_padre : null;
+  }
+
+  /** SKU de bulto cerrado: "339 BC - …" debería consumir 1 materia prima entera; "189 BCx2 - …", 2. null = no es BC. */
+  function esperadoBC(sku) {
+    const r = /\bBC(?:\s*X\s*(\d+(?:[.,]\d+)?))?\b/i.exec(String(sku || "").split(" - ")[0]);
+    return r ? (r[1] ? Number(r[1].replace(",", ".")) : 1) : null;
+  }
+
+  /** Materias primas cuyo consumo en MP (÷ Unidades por Paquete) no es confiable → Map código → { tipo, motivo, sku?, fila? }.
+      1) "Unidades por Paquete" vacía, 0 o no numérica.  2) Un SKU "BC" que no da su cantidad de MP enteras (tolerancia 1 %). */
+  function dudosas(productos, materias) {
+    const mats = new Map(materias.map((m) => [m.codigo, m]));
+    const out = new Map();
+    for (const m of materias) {
+      if (m.unid_bulto > 0) continue;
+      const crudo = m._crudoL === undefined ? null : m._crudoL;
+      out.set(m.codigo, { tipo: "bulto_invalido", motivo: `"Unidades por Paquete" (columna L de MATERIA PRIMA) ${crudo === null ? "está vacía o no es un número" : crudo ? `dice "${crudo}"` : "está vacía"}: no se puede pasar a materias primas.` });
+    }
+    for (const p of productos) {
+      const esp = esperadoBC(p.sku);
+      if (esp === null || !p.codigo_mp) continue;
+      const m = mats.get(p.codigo_mp), f = factorProducto(p);
+      if (!m || !(m.unid_bulto > 0) || f === null || out.has(m.codigo)) continue;
+      const v = f / m.unid_bulto;
+      if (Math.abs(v - esp) > 0.01 * Math.max(esp, v)) out.set(m.codigo, { tipo: "bc_inconsistente", sku: p.sku, fila: p.fila,
+        motivo: `El SKU "${p.sku}" es bulto cerrado y daría ${fmtN(v)} materias primas en vez de ${fmtN(esp)}: revisar "Unidades por Paquete" (columna L) de la ${m.codigo} o el factor del SKU.` });
+    }
+    return out;
   }
 
   /** Aristas hijo → padre (con dividendo; null = sin factor). */
@@ -1546,8 +1596,9 @@ const MP = (() => {
   }
 
   /** Avisos de datos del Excel. No frenan el guardado: se muestran para que Stock los corrija. */
-  function validar(productos, materias, dupsP, dupsM, ignoradas) {
+  function validar(productos, materias, dupsP, dupsM, ignoradas, faltanCols = []) {
     const adv = [];
+    for (const c of faltanCols) adv.push({ tipo: "columna_faltante", hoja: c.hoja, codigo: c.col, fila: c.fila, msg: `No encuentro la columna "${c.col}" en la fila de títulos: ${c.efecto}` });
     const mats = new Map(materias.map((m) => [m.codigo, m]));
     for (const d of dupsP) adv.push(d.igual
       ? { tipo: "sku_duplicado", sku: d.x.sku, fila: d.fila, msg: `Repetido: igual a la fila ${d.filaUsada}` }
@@ -1571,16 +1622,33 @@ const MP = (() => {
       if (m.padre1 && m.padre_corte && m.padre_corte !== m.padre1 && m.padre_corte !== m.padre2) adv.push({ tipo: "corte_distinto", codigo: m.codigo, fila: m.fila, msg: `CODIGO 1 dice ${m.padre1} y la columna de papeles cortados dice ${m.padre_corte}: se usa ${m.padre1}` });
       if (enCiclo.has(m.codigo)) adv.push({ tipo: "ciclo", codigo: m.codigo, fila: m.fila, msg: "Forma parte de una cadena circular (una materia prima sale de otra que sale de ella)" });
     }
+    // consumo en materia prima: solo materias primas que usa algún SKU (directo o por la cadena)
+    const usadas = new Set(arbol(productos, materias).map((a) => a.codigo));
+    const hayL = materias.some((m) => m.unid_bulto !== null && m.unid_bulto !== undefined) || materias.some((m) => m._crudoL);
+    for (const [cod, d] of dudosas(productos, materias)) {
+      if (!usadas.has(cod) || (d.tipo === "bulto_invalido" && !hayL)) continue;
+      const m = mats.get(cod);
+      if (d.tipo === "bulto_invalido") adv.push({ tipo: "bulto_invalido", codigo: cod, fila: m ? m.fila : null, hoja: "MATERIA PRIMA", msg: d.motivo + " Su consumo se muestra \"dudoso\"." });
+      else adv.push({ tipo: "bc_inconsistente", sku: d.sku, fila: d.fila, hoja: "BASE GENERAL", msg: d.motivo + ` La ${cod} se muestra "dudoso".` });
+    }
+    const hijosDe = new Map();
+    for (const m of materias) for (const pc of [m.padre1, m.padre2, !m.padre1 ? m.padre_corte : null]) if (pc) { if (!hijosDe.has(pc)) hijosDe.set(pc, []); hijosDe.get(pc).push(m.codigo); }
+    for (const [pc, hijos] of hijosDe) {
+      const m = mats.get(pc);
+      if (!m || m.es_plana !== false) continue; // true = plana; null = no se leyó la columna
+      adv.push({ tipo: "corte_no_plana", codigo: pc, fila: m.fila, hoja: "MATERIA PRIMA",
+        msg: `Salen cortes de ella (${hijos.slice(0, 6).join(", ")}${hijos.length > 6 ? ` y ${hijos.length - 6} más` : ""}) pero no está marcada "es plana" (columna BO). Si es una resma o pliego, poné 1: su consumo pasa a "próximamente" hasta cargar la merma. Si no (ej. un rollo), dejala así.` });
+    }
     for (const i of ignoradas) adv.push({ tipo: "fila_ignorada", hoja: i.hoja, sku: i.sku || i.codigo || "", fila: i.fila, msg: `Fila de ${i.hoja} sin ${i.hoja === "MATERIA PRIMA" ? "código válido" : "SKU válido"}: no se copia` });
     return adv;
   }
 
   /** Lectura completa → lo que se guarda (sin duplicados) + avisos. */
-  function preparar(prod, mat, hojas = {}) {
+  function preparar(prod, mat, hojas = {}, faltanCols = []) {
     const dp = deduplicar(prod.filas, (p) => normSku(p.sku), (a, b) => a.codigo_mp === b.codigo_mp && igualNum(factorProducto(a), factorProducto(b)));
     const dm = deduplicar(mat.filas, (m) => m.codigo, (a, b) => a.padre1 === b.padre1 && igualNum(a.div1, b.div1));
     const ign = [...prod.ignoradas.map((i) => ({ ...i, hoja: hojas.productos || "BASE GENERAL" })), ...mat.ignoradas.map((i) => ({ ...i, hoja: hojas.materias || "MATERIA PRIMA" }))];
-    return { productos: dp.lista, materias: dm.lista, advertencias: validar(dp.lista, dm.lista, dp.dups, dm.dups, ign) };
+    return { productos: dp.lista, materias: dm.lista, advertencias: validar(dp.lista, dm.lista, dp.dups, dm.dups, ign, faltanCols) };
   }
 
   /** Qué cambia entre la copia guardada y lo leído del Excel. */
@@ -1600,11 +1668,11 @@ const MP = (() => {
     const dM = (m) => {
       const rel = [m.padre1 ? `sale de ${m.padre1} ÷${fmtN(m.div1)}` : null, m.padre2 ? `y de ${m.padre2} ÷${fmtN(m.div2)}` : null,
         !m.padre1 && m.padre_corte ? `sale de ${m.padre_corte} (sin factor)` : null].filter(Boolean).join(" ");
-      return `${m.sku || m.codigo}${m.unidad ? ` · ${m.unidad}` : ""}${m.cant_minima > 1 ? ` ×${fmtN(m.cant_minima)}` : ""}${rel ? ` · ${rel}` : ""}`;
+      return `${m.sku || m.codigo}${m.unidad ? ` · ${m.unidad}` : ""}${m.cant_minima > 1 ? ` ×${fmtN(m.cant_minima)}` : ""}${m.unid_bulto > 0 ? ` · 1 MP = ${fmtN(m.unid_bulto)}` : " · sin Unidades por Paquete"}${m.es_plana ? " · plana" : ""}${rel ? ` · ${rel}` : ""}`;
     };
     const gm = new Map(g.materias.map((m) => [m.codigo, m]));
     const nm = new Map(nuevo.materias.map((m) => [m.codigo, m]));
-    const CAMPOS = ["sku", "unidad", "padre1", "padre2", "padre_corte"], NUMS = ["cant_minima", "div1", "div2"];
+    const CAMPOS = ["sku", "unidad", "padre1", "padre2", "padre_corte", "es_plana"], NUMS = ["cant_minima", "unid_bulto", "div1", "div2"];
     for (const [k, m] of nm) {
       const o = gm.get(k);
       if (!o) cambios.push({ tipo: "mp_nueva", clave: m.codigo, antes: "—", ahora: dM(m) });
@@ -1620,12 +1688,12 @@ const MP = (() => {
   function paraGuardar(lectura) {
     return {
       productos: lectura.productos.map((p) => ({ sku: p.sku, codigo_mp: p.codigo_mp, tipo: p.tipo, unid_total: p.unid_total, division: p.division, cant_padre: p.cant_padre, fila: p.fila })),
-      materias: lectura.materias.map((m) => ({ codigo: m.codigo, sku: m.sku, cant_minima: m.cant_minima, unidad: m.unidad, padre1: m.padre1, div1: m.div1, padre2: m.padre2, div2: m.div2, padre_corte: m.padre_corte, fila: m.fila })),
+      materias: lectura.materias.map((m) => ({ codigo: m.codigo, sku: m.sku, cant_minima: m.cant_minima, unidad: m.unidad, unid_bulto: m.unid_bulto, es_plana: m.es_plana, padre1: m.padre1, div1: m.div1, padre2: m.padre2, div2: m.div2, padre_corte: m.padre_corte, fila: m.fila })),
       advertencias: lectura.advertencias.slice(0, 500).map((a) => ({ tipo: a.tipo, sku: a.sku || null, codigo: a.codigo || null, fila: a.fila ?? null, hoja: a.hoja || null, msg: a.msg })),
     };
   }
 
-  return { normTxt, normSku, num, igualNum, buscarColumnas, parsearProductos, parsearMaterias, factorProducto, arbol, preparar, diff, paraGuardar, ciclos };
+  return { normTxt, normSku, num, igualNum, buscarColumnas, parsearProductos, parsearMaterias, factorProducto, esperadoBC, dudosas, arbol, preparar, diff, paraGuardar, ciclos };
 })();
 
 /* ---------- MATERIA PRIMA (pestaña) ----------
@@ -1639,10 +1707,31 @@ const horaCorta = (d) => (d ? new Date(d).toLocaleTimeString("es-AR", { timeZone
 const esMovil = () => matchMedia("(pointer: coarse)").matches && !matchMedia("(pointer: fine)").matches;
 const faltaBaseMP = (e) => !!e && /PGRST202|Could not find the function|does not exist/i.test(`${e.code || ""} ${e.message || ""}`);
 const descMP = (m, cod) => { const t = (m && m.sku) || ""; const i = t.indexOf(" - "); return i >= 0 ? t.slice(i + 3) : t || cod; };
+const esPorKilo = (m) => !!m && /hjs?\s*\/\s*kg/i.test(m.unidad || "");   // ej. Kraft cortado: "Unidades por Paquete" = hojas por kilo
 function unidadMP(m) {
   if (!m) return "u.";
-  const u = (m.unidad || "u.").trim();
+  const u = esPorKilo(m) ? "Hjs." : (m.unidad || "u.").trim();
   return m.cant_minima > 1 ? `paq. ×${nf0.format(m.cant_minima)} ${u}` : u;
+}
+/** Cuánto es 1 materia prima tal cual se compra, en su unidad de consumo. */
+function equivMP(m) {
+  if (!m || !(m.unid_bulto > 0)) return "";
+  return esPorKilo(m) ? `1 MP = 1 kg (${nf4.format(m.unid_bulto)} Hjs.)` : `1 MP = ${nf4.format(m.unid_bulto)} ${unidadMP(m)}`;
+}
+/** Consumo en materias primas: con más decimales cuando es chico (0,02 de un bulto). */
+const nfSig2 = new Intl.NumberFormat("es-AR", { maximumSignificantDigits: 2 });
+const fMP = (v) => (v === null || v === undefined || !isFinite(v) || v === 0 ? "–" : Math.abs(v) >= 0.1 ? fC(v) : nfSig2.format(v));
+const MODO_MP = {
+  dudoso: { t: "dudoso", cls: "warn" },
+  plana: { t: "próximamente", cls: "neutral" },
+};
+const pillMP = (f) => h("span", { class: "pill " + MODO_MP[f.modo].cls, title: f.motivo, text: MODO_MP[f.modo].t });
+/** Celda de consumo: en MP (grande) + en su unidad (chico); o "dudoso"/"próximamente" + su unidad. */
+function celdaConsumo(f, base, esc) {
+  if (!base) return [h("div", { text: "–" })];
+  const sub = h("div", { class: "mpsub", text: `${fC(base)} ${f.unidad}${f.modo === "plana" ? " sin merma" : ""}` });
+  if (f.modo !== "mp") return [h("div", {}, pillMP(f)), sub];
+  return esc === 1 ? [h("div", { text: fMP(base) })] : [h("div", { text: fMP(base * esc) }), sub]; // 1 MP = 1 unidad: no repite el número
 }
 const ADV_MP = {
   sku_duplicado_distinto: { nivel: "alta", t: "SKU repetido con distinta materia prima o factor" },
@@ -1654,6 +1743,10 @@ const ADV_MP = {
   corte_sin_factor: { nivel: "media", t: "Papel cortado sin CODIGO 1 ni dividendo (no suma al padre)" },
   corte_distinto: { nivel: "media", t: "CODIGO 1 distinto de la columna de papeles cortados" },
   sin_mp: { nivel: "media", t: "SKU sin código de materia prima" },
+  columna_faltante: { nivel: "alta", t: "Falta una columna en MATERIA PRIMA" },
+  bulto_invalido: { nivel: "media", t: "Materia prima sin \"Unidades por Paquete\" válida (consumo dudoso)" },
+  bc_inconsistente: { nivel: "media", t: "SKU de bulto cerrado (BC) que no da 1 materia prima (consumo dudoso)" },
+  corte_no_plana: { nivel: "baja", t: "Tiene cortes pero no está marcada \"es plana\"" },
   sku_duplicado: { nivel: "baja", t: "SKU repetido (mismos datos)" },
   mp_duplicada: { nivel: "baja", t: "Código de materia prima repetido" },
   fila_ignorada: { nivel: "baja", t: "Fila sin SKU o código válido (no se copia)" },
@@ -1678,7 +1771,8 @@ function normalizarMapeo(x) {
   const n = (v) => (v === null || v === undefined || v === "" ? null : Number(v));
   return {
     productos: (x?.productos || []).map((p) => ({ sku: p.sku, codigo_mp: p.codigo_mp || null, tipo: p.tipo || null, unid_total: n(p.unid_total), division: n(p.division), cant_padre: n(p.cant_padre), fila: p.fila ?? null })),
-    materias: (x?.materias || []).map((m) => ({ codigo: m.codigo, sku: m.sku || null, cant_minima: n(m.cant_minima), unidad: m.unidad || null, padre1: m.padre1 || null, div1: n(m.div1), padre2: m.padre2 || null, div2: n(m.div2), padre_corte: m.padre_corte || null, fila: m.fila ?? null })),
+    materias: (x?.materias || []).map((m) => ({ codigo: m.codigo, sku: m.sku || null, cant_minima: n(m.cant_minima), unidad: m.unidad || null,
+      unid_bulto: n(m.unid_bulto), es_plana: m.es_plana === true ? true : m.es_plana === false ? false : null, padre1: m.padre1 || null, div1: n(m.div1), padre2: m.padre2 || null, div2: n(m.div2), padre_corte: m.padre_corte || null, fila: m.fila ?? null })),
     sync: x?.sync || {},
   };
 }
@@ -1710,6 +1804,14 @@ async function cargarMensualMP(cod, silencioso) {
 }
 
 /* ---- cálculo: ranking por materia prima (cadena completa) + calidad de datos ---- */
+/** Cómo se muestra el consumo de una materia prima: "mp" (en materias primas), "plana" (próximamente, falta la merma) o "dudoso". */
+function modoConsumoMP(m, cod, dud, copiaVieja) {
+  if (copiaVieja) return { modo: "dudoso", motivo: "La copia del Excel se guardó con una versión anterior de la app y no trae \"Unidades por Paquete\" ni \"es plana\": volvé a leer y guardar el Excel." };
+  if (!m) return { modo: "dudoso", motivo: `La ${cod} no está en la hoja MATERIA PRIMA.` };
+  if (m.es_plana) return { modo: "plana", motivo: "Es plana (columna \"es plana\" de MATERIA PRIMA): se corta y tiene merma. Su consumo en materias primas va a estar cuando se cargue el % de merma; mientras, ves sus unidades sin merma." };
+  if (dud.has(cod)) return { modo: "dudoso", motivo: dud.get(cod).motivo };
+  return { modo: "mp", motivo: null };
+}
 function calcularMP() {
   const M = state.mp;
   if (M.calc && M.calc.cat === state.catalogo && M.calc.arbol === M.arbol) return M.calc;
@@ -1730,8 +1832,12 @@ function calcularMP() {
       if (c.ultima_venta && (!x.ultima || c.ultima_venta > x.ultima)) x.ultima = c.ultima_venta;
     }
   }
+  // consumo en materias primas (÷ Unidades por Paquete): no planas y con datos que cierran
+  const dud = MP.dudosas(M.mapeo.productos, M.mapeo.materias);
+  const copiaVieja = M.mapeo.materias.length > 0 && M.mapeo.materias.every((m) => m.unid_bulto === null && m.es_plana === null);
   const filas = [...agg.values()].map((x) => {
     const m = M.materias.get(x.codigo);
+    const cm = modoConsumoMP(m, x.codigo, dud, copiaVieja), esc = cm.modo === "mp" ? 1 / m.unid_bulto : null;
     const diasSin = x.ultima ? hoy - dn(x.ultima) : Infinity;
     const usaC = x.c90 > 0, b30 = usaC ? x.c30 : x.u30, b90 = usaC ? x.c90 : x.u90;
     const tend = b90 > 0 ? (b30 / 30) / (b90 / 90) - 1 : null;
@@ -1741,7 +1847,8 @@ function calcularMP() {
     else if (x.u90 >= UMBRALES.minUnid90 && tend !== null && tend <= UMBRALES.caida) estado = "caida";
     else if (x.u90 >= UMBRALES.minUnid90 && tend !== null && tend >= UMBRALES.alza) estado = "alza";
     const padres = m ? [m.padre1, m.padre2, !m.padre1 ? m.padre_corte : null].filter(Boolean) : [];
-    return { ...x, nSkus: x.skus.size, nVenta: x.skusVenta.size, m, nombre: descMP(m, x.codigo), unidad: unidadMP(m), diasSin, v30: x.c30 / 30, tend, estado, padres, raiz: !padres.length };
+    return { ...x, nSkus: x.skus.size, nVenta: x.skusVenta.size, m, nombre: descMP(m, x.codigo), unidad: unidadMP(m), diasSin, v30: x.c30 / 30, tend, estado, padres, raiz: !padres.length,
+      ...cm, esc, equiv: equivMP(m), mp30: esc ? x.c30 * esc : null, mp90: esc ? x.c90 * esc : null, mpv30: esc ? (x.c30 / 30) * esc : null };
   });
   // calidad de datos: SKUs vendidos en 90 d que no se pueden llevar a materia prima
   const directa = new Map();
@@ -1761,7 +1868,7 @@ function calcularMP() {
     else u90ok += c.unid_90;
   }
   sinMP.sort((a, b) => b.u90 - a.u90);
-  M.calc = { cat: state.catalogo, arbol: M.arbol, filas, porCodigo, catPorNorm, sinMP, u90tot, u90ok, cobertura: u90tot ? u90ok / u90tot : null };
+  M.calc = { cat: state.catalogo, arbol: M.arbol, filas, porCodigo, catPorNorm, sinMP, u90tot, u90ok, cobertura: u90tot ? u90ok / u90tot : null, dud, copiaVieja };
   return M.calc;
 }
 
@@ -1787,7 +1894,9 @@ async function leerHojaMP(libro, def) {
   const col = MP.buscarColumnas(enc.encabezados, def);
   if (col.faltan.length) throw errMP("columnas", `En la hoja ${def.hoja} (fila ${def.fila}) no encuentro ${col.faltan.length > 1 ? "las columnas" : "la columna"} ${col.faltan.map((x) => `"${x}"`).join(", ")}. ¿Les cambiaron el nombre o se movió la fila de títulos?`);
   const lect = await agenteGet("/api/leer", { libro, hoja: def.hoja, fila: def.fila, cols: [...new Set(Object.values(col.letras))].join(",") }, MP_CFG.timeoutLecturaMs);
-  return { col, filas: lect.filas || [] };
+  const faltanRec = (def.recomendadas || []).filter((c) => !col.letras[c]).map((c) => ({ hoja: def.hoja, fila: def.fila, col: def.cols[c][0],
+    efecto: c === "es_plana" ? "las planas no se distinguen (todas se calculan como no planas)." : "el consumo en materias primas queda \"dudoso\" en todas." }));
+  return { col, filas: lect.filas || [], faltanRec };
 }
 async function leerExcelMP() {
   const X = state.mp.excel;
@@ -1810,7 +1919,7 @@ async function leerExcelMP() {
     const prod = MP.parsearProductos(hp.filas, hp.col.letras, MP_CFG.ignorarSku);
     const mat = MP.parsearMaterias(hm.filas, hm.col.letras);
     if (prod.filas.length < MP_CFG.minFilasProductos) throw errMP("pocas_filas", `Leí solo ${prod.filas.length} SKUs en ${MP_CFG.productos.hoja}: parece la hoja equivocada o un filtro aplicado. No se compara nada.`);
-    X.lectura = MP.preparar(prod, mat, { productos: MP_CFG.productos.hoja, materias: MP_CFG.materias.hoja });
+    X.lectura = MP.preparar(prod, mat, { productos: MP_CFG.productos.hoja, materias: MP_CFG.materias.hoja }, [...hp.faltanRec, ...hm.faltanRec]);
     X.columnas = { productos: hp.col.textos, materias: hm.col.textos };
     X.leidoAt = new Date();
     X.diff = state.mp.mapeo ? MP.diff(state.mp.mapeo, X.lectura) : null;
@@ -1925,11 +2034,12 @@ function abrirDiffMP() {
     h("div", { class: "toolbar", style: "margin-top:14px;justify-content:flex-end" }, msg, btn));
   const dlg = abrirModal(d.primeraCarga ? "Primera carga desde el Excel" : "Cambios del Excel", cuerpo, 960);
 }
+const hojaAviso = (a) => a.hoja || (a.codigo && !a.sku ? MP_CFG.materias.hoja : MP_CFG.productos.hoja);
 function abrirAvisosMP(lista, subtitulo) {
   const grupos = new Map();
   for (const a of lista || []) { if (!grupos.has(a.tipo)) grupos.set(a.tipo, []); grupos.get(a.tipo).push(a); }
   const orden = [...grupos.keys()].sort((a, b) => (NIVEL_ORDEN[(ADV_MP[a] || {}).nivel] ?? 3) - (NIVEL_ORDEN[(ADV_MP[b] || {}).nivel] ?? 3));
-  const tsv = ["Aviso\tHoja\tFila\tSKU o código\tDetalle", ...(lista || []).map((a) => [(ADV_MP[a.tipo] || {}).t || a.tipo, a.hoja || (a.codigo && !a.sku ? "MATERIA PRIMA" : "BASE GENERAL"), a.fila ?? "", a.sku || a.codigo || "", a.msg].join("\t"))].join("\n");
+  const tsv = ["Aviso\tHoja\tFila\tSKU o código\tDetalle", ...(lista || []).map((a) => [(ADV_MP[a.tipo] || {}).t || a.tipo, hojaAviso(a), a.fila ?? "", a.sku || a.codigo || "", a.msg].join("\t"))].join("\n");
   const copiado = h("span", { class: "okmsg" });
   const cuerpo = h("div", {},
     h("p", { class: "ink2", text: `${subtitulo || ""}. Son problemas del Excel: los corrige quien mantiene BASE GENERAL y MATERIA PRIMA (Stock). Después de corregir, volvé a leer el Excel y guardá.` }),
@@ -1940,8 +2050,8 @@ function abrirAvisosMP(lista, subtitulo) {
       return h("section", {},
         h("h3", {}, tag(info.nivel === "alta" ? "stop" : info.nivel === "media" ? "down" : "off", info.nivel === "alta" ? "bad" : info.nivel === "media" ? "warn" : "neutral", ""), ` ${info.t} · ${fN(items.length)}`),
         h("div", { class: "tbl-wrap", style: "max-height:240px" }, h("table", {},
-          h("thead", {}, h("tr", {}, h("th", { class: "num", text: "Fila" }), h("th", { text: "SKU o código" }), h("th", { text: "Detalle" }))),
-          h("tbody", {}, items.slice(0, 300).map((a) => h("tr", {}, h("td", { class: "num", text: a.fila ?? "–" }), h("td", {}, h("b", { text: a.sku || a.codigo || "–" })), h("td", { class: "ink2", style: "white-space:normal", text: a.msg })))))));
+          h("thead", {}, h("tr", {}, h("th", { text: "Hoja" }), h("th", { class: "num", text: "Fila" }), h("th", { text: "SKU o código" }), h("th", { text: "Detalle" }))),
+          h("tbody", {}, items.slice(0, 300).map((a) => h("tr", {}, h("td", { class: "ink2", style: "white-space:nowrap", text: hojaAviso(a) }), h("td", { class: "num", text: a.fila ?? "–" }), h("td", {}, h("b", { text: a.sku || a.codigo || "–" })), h("td", { class: "ink2", style: "white-space:normal", text: a.msg })))))));
     }));
   abrirModal("Avisos del Excel (materia prima)", cuerpo, 900);
 }
@@ -1991,7 +2101,8 @@ function tileMP(k, v, d, onclick, pressed) {
 function nombreMP(f, conDetalle) {
   const nombre = h("span", { class: "mpname" }, h("b", { text: f.codigo }), h("span", { class: "nm2", text: f.nombre !== f.codigo ? f.nombre : "" }));
   if (!conDetalle) return nombre;
-  return h("div", {}, nombre, h("div", { class: "mpsub", text: `en ${f.unidad}${f.raiz ? "" : ` · sale de ${f.padres.join(" y ")}`}` }));
+  const en = f.modo === "mp" && f.equiv ? f.equiv : `${f.modo === "plana" ? "plana · " : ""}en ${f.unidad}`;
+  return h("div", {}, nombre, h("div", { class: "mpsub", text: `${en}${f.raiz ? "" : ` · sale de ${f.padres.join(" y ")}`}` }));
 }
 function vistaMP() {
   const M = state.mp;
@@ -2015,6 +2126,8 @@ function vistaMPRanking() {
   if (R.filtro === "con_consumo") vis = vis.filter((f) => f.u90 > 0);
   else if (R.filtro === "raiz") vis = vis.filter((f) => f.raiz && f.u90 > 0);
   else if (R.filtro === "incompletas") vis = vis.filter((f) => f.sinF90 > 0);
+  else if (R.filtro === "dudosas") vis = vis.filter((f) => f.modo === "dudoso" && f.u90 > 0);
+  else if (R.filtro === "planas") vis = vis.filter((f) => f.modo === "plana");
   const q = MP.normTxt(R.q);
   if (q) vis = vis.filter((f) => MP.normTxt(f.codigo).startsWith(q) || MP.normTxt(`${f.codigo} ${f.nombre}`).includes(q));
   const { col, dir } = R.orden;
@@ -2023,13 +2136,16 @@ function vistaMPRanking() {
   else vis = [...vis].sort((a, b) => { const x = val(a), y = val(b); return (x < y ? -1 : x > y ? 1 : 0) * dir || b.u90 - a.u90; });
 
   const conConsumo = C.filas.filter((f) => f.u90 > 0).length;
+  const nDudosas = C.filas.filter((f) => f.modo === "dudoso" && f.u90 > 0).length;
   const tiles = h("div", { class: "tiles" },
     tileMP("Materias primas con consumo (90 d)", nf0.format(conConsumo), `de ${nf0.format(C.filas.length)} con SKUs asociados`),
     tileMP("Cobertura de ventas con MP (90 d)", fP(C.cobertura), `${fN(C.u90ok)} de ${fN(C.u90tot)} unidades vendidas`),
     tileMP("SKUs vendidos sin materia prima (90 d)", nf0.format(C.sinMP.length), C.sinMP.length ? "Tocá para ver la lista y pasársela a Stock" : "todo completo", C.sinMP.length ? abrirSinMP : null),
+    tileMP("Materias primas dudosas (90 d)", nf0.format(nDudosas), nDudosas ? (R.filtro === "dudosas" ? "Mostrando solo esas · tocá para ver todas" : "Tocá para ver cuáles") : "todas cierran",
+      nDudosas ? () => { R.filtro = R.filtro === "dudosas" ? "con_consumo" : "dudosas"; render(); } : null, R.filtro === "dudosas"),
     tileMP("Copia del Excel", S.ultimo_sync_at ? fD(new Date(S.ultimo_sync_at).toLocaleDateString("en-CA", { timeZone: TZ })) : "–", S.ultimo_sync_at ? `${horaCorta(S.ultimo_sync_at)} · ${S.ultimo_sync_por || "—"}` : "sin copia todavía"));
 
-  const COLS = [["Materia prima", "nombre"], ["SKUs con venta 90 d", "nVenta", 1], ["Unid. vendidas 90 d", "u90", 1], ["Consumo 30 d", "c30", 1], ["Consumo/día 30 d", "v30", 1], ["Consumo 90 d", "c90", 1], ["Tendencia MP", "tend", 1], ["Última venta", "ultima", 1], ["Estado MP", null]];
+  const COLS = [["Materia prima", "nombre"], ["SKUs con venta 90 d", "nVenta", 1], ["Unid. vendidas 90 d", "u90", 1], ["Consumo 30 d (MP)", "mp30", 1], ["Consumo/día 30 d (MP)", "mpv30", 1], ["Consumo 90 d (MP)", "mp90", 1], ["Tendencia MP", "tend", 1], ["Última venta", "ultima", 1], ["Estado MP", null]];
   const thead = h("tr", {}, COLS.map(([t, k, num]) => {
     if (!k) return h("th", {}, t, ayuda(AYUDA[t]));
     const arrow = col === k ? (dir < 0 ? " ↓" : " ↑") : "";
@@ -2041,9 +2157,9 @@ function vistaMPRanking() {
       h("td", { class: "skucol" }, nombreMP(f, true)),
       h("td", { class: "num", text: `${fN(f.nVenta)} / ${fN(f.nSkus)}` }),
       h("td", { class: "num", text: fN(f.u90) }),
-      h("td", { class: "num" }, f.sinF90 > 0 ? h("span", { class: "warnmsg", title: `${fN(f.sinF90)} unidades vendidas (90 d) sin factor: no suman consumo`, text: "⚠ " }) : null, fC(f.c30)),
-      h("td", { class: "num", text: fC(f.v30) }),
-      h("td", { class: "num", text: fC(f.c90) }),
+      h("td", { class: "num" }, f.sinF90 > 0 ? h("span", { class: "warnmsg", title: `${fN(f.sinF90)} unidades vendidas (90 d) sin factor: no suman consumo`, text: "⚠ " }) : null, celdaConsumo(f, f.c30, f.esc)),
+      h("td", { class: "num" }, celdaConsumo(f, f.v30, f.esc)),
+      h("td", { class: "num" }, celdaConsumo(f, f.c90, f.esc)),
       h("td", { class: "num", text: f.u90 >= UMBRALES.minUnid90 ? fPs(f.tend) : "–" }),
       h("td", { class: "num", text: fD(f.ultima) + (f.diasSin > 0 && f.diasSin < 9999 ? ` (${f.diasSin} d)` : "") }),
       h("td", {}, ESTADOS[f.estado]()));
@@ -2054,16 +2170,17 @@ function vistaMPRanking() {
   const buscador = h("input", { type: "search", id: "mpQ", placeholder: "Buscar materia prima (código o nombre)…", value: R.q, "aria-label": "Buscar materia prima" });
   buscador.addEventListener("input", (e) => { R.q = e.target.value; clearTimeout(buscador._t); buscador._t = setTimeout(() => { const pos = e.target.selectionStart; render(); const b = $("#mpQ"); if (b) { b.focus(); b.setSelectionRange(pos, pos); } }, 200); });
   const filtroSel = h("select", { "aria-label": "Filtro de materias primas", class: "sel", onchange: (e) => { R.filtro = e.target.value; render(); } },
-    [["con_consumo", "Con ventas en 90 d"], ["raiz", "Solo de origen (no salen de otra)"], ["incompletas", "Con SKUs sin factor"], ["todas", "Todas"]].map(([v, t]) => { const o = h("option", { value: v, text: t }); if (R.filtro === v) o.selected = true; return o; }));
+    [["con_consumo", "Con ventas en 90 d"], ["raiz", "Solo de origen (no salen de otra)"], ["incompletas", "Con SKUs sin factor"], ["dudosas", "Dudosas (revisar el Excel)"], ["planas", "Planas (próximamente)"], ["todas", "Todas"]].map(([v, t]) => { const o = h("option", { value: v, text: t }); if (R.filtro === v) o.selected = true; return o; }));
 
   return [
     sinCopia ? null : tiles,
     h("div", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h2", { text: "Excel maestro" }), h("p", { class: "sub", text: "La relación SKU → materia prima sale de BASE GENERAL y MATERIA PRIMA del \"ver. octubre\". La app usa la copia guardada en la base." }))),
       h("div", { id: "mpExcelBox" }, cajaExcel())),
+    !sinCopia && C.copiaVieja ? h("div", { class: "banner" }, tag("down", "warn", ""), " La copia guardada del Excel es de una versión anterior y no trae \"Unidades por Paquete\" ni \"es plana\": el consumo en materias primas dice \"dudoso\" en todas. " + (state.puedeImportar ? "Leé el Excel y tocá \"Revisar y guardar\" para completarla." : "Pedile a gerencia que vuelva a guardar el Excel.")) : null,
     sinCopia ? vacio("Todavía no hay copia del Excel", state.puedeImportar ? "Abrí el \"ver. octubre\" y calendarios-agente.exe en esta PC, tocá \"Leer Excel de esta PC\" y después \"Revisar y guardar\"." : "Pedile a gerencia que cargue la relación SKU → materia prima desde el Excel.") :
     h("div", { class: "card" },
       h("div", { class: "card-head" },
-        h("div", {}, h("h2", { text: "Ranking de materias primas" }), h("p", { class: "sub", text: `Ventas válidas a hoy, con la cadena completa (un pliego suma las ventas de sus cortes, convertidas). El consumo está en la unidad de cada materia prima: entre filas compará unidades o tendencia, no consumo. ${fN(vis.length)} materias primas. Tocá una para ver sus SKUs.` })),
+        h("div", {}, h("h2", { text: "Ranking de materias primas" }), h("p", { class: "sub", text: `Ventas válidas a hoy, con la cadena completa (un pliego suma las ventas de sus cortes, convertidas). Consumo en materias primas tal cual se compran (1 MP = lo que dice "Unidades por Paquete"); abajo, chico, en su unidad de consumo. "próximamente" = plana (falta la merma); "dudoso" = un dato del Excel no cierra. ${fN(vis.length)} materias primas. Tocá una para ver sus SKUs.` })),
         h("div", { class: "toolbar" }, buscador, filtroSel)),
       h("div", { class: "tbl-wrap" }, h("table", {}, h("thead", {}, thead), tbody)),
       vis.length > MAXF ? h("p", { class: "sub", style: "margin-top:8px", text: `Mostrando ${MAXF} de ${fN(vis.length)}. Usá el buscador para acotar.` }) : null,
@@ -2085,7 +2202,9 @@ function filasHijosMP(cod) {
 function vistaMPDetalle(cod) {
   const M = state.mp, C = calcularMP(), D = M.det;
   const m = M.materias.get(cod);
-  const f = C.filas.find((x) => x.codigo === cod) || (m ? { codigo: cod, m, nombre: descMP(m, cod), unidad: unidadMP(m), padres: [m.padre1, m.padre2, !m.padre1 ? m.padre_corte : null].filter(Boolean), raiz: true, nSkus: 0, nVenta: 0, u30: 0, u90: 0, c30: 0, c90: 0, v30: 0, tend: null, sinF90: 0, estado: "inactivo", ultima: null } : null);
+  const f = C.filas.find((x) => x.codigo === cod) || (m ? { codigo: cod, m, nombre: descMP(m, cod), unidad: unidadMP(m), padres: [m.padre1, m.padre2, !m.padre1 ? m.padre_corte : null].filter(Boolean), raiz: true, nSkus: 0, nVenta: 0, u30: 0, u90: 0, c30: 0, c90: 0, v30: 0, tend: null, sinF90: 0, estado: "inactivo", ultima: null,
+    ...modoConsumoMP(m, cod, C.dud, C.copiaVieja), equiv: equivMP(m) } : null);
+  if (f && f.esc === undefined) f.esc = f.modo === "mp" ? 1 / m.unid_bulto : null;
   const volver = h("button", { class: "btn", text: "← Ranking de materias primas", onclick: () => setSelMP(null) });
   if (!f) return [vacio("No encuentro esa materia prima", `El código ${cod} no está en la copia del Excel.`, volver)];
   const todas = filasHijosMP(cod);
@@ -2101,11 +2220,14 @@ function vistaMPDetalle(cod) {
   const hijosMP = M.mapeo.materias.filter((x) => x.padre1 === cod || x.padre2 === cod || (!x.padre1 && x.padre_corte === cod));
   if (hijosMP.length) { rel.append(h("span", { class: "muted", style: "margin-left:8px", text: "Alimenta a:" })); for (const x of hijosMP.slice(0, 30)) rel.append(chipMP(x.codigo)); if (hijosMP.length > 30) rel.append(h("span", { class: "muted", text: `+${hijosMP.length - 30}` })); }
 
+  const enMP = f.modo === "mp", esc = enMP ? f.esc : 1, uniV = enMP ? "MP" : f.unidad;
+  const tileC = (k, base, cola) => tileMP(k, enMP || !base ? fMP(base * esc) : pillMP(f),
+    enMP ? (base ? `MP${cola} · = ${fC(base)} ${f.unidad}` : "MP" + cola) : base ? `${fC(base)} ${f.unidad}${cola}${f.modo === "plana" ? " sin merma" : ""}` : f.unidad + cola);
   const tiles = h("div", { class: "tiles" },
-    tileMP("Consumo 30 d", fC(f.c30), f.unidad),
-    tileMP("Consumo/día 30 d", fC(f.v30), f.unidad + " por día"),
-    tileMP("Consumo 90 d", fC(f.c90), f.unidad),
-    tileMP("Proyección mensual de consumo", fC(f.v30 * 30), f.unidad + " al ritmo de 30 d"),
+    tileC("Consumo 30 d", f.c30, ""),
+    tileC("Consumo/día 30 d", f.v30, " por día"),
+    tileC("Consumo 90 d", f.c90, ""),
+    tileC("Proyección mensual de consumo", f.v30 * 30, " al ritmo de 30 d"),
     tileMP("Tendencia de consumo", f.u90 >= UMBRALES.minUnid90 ? fPs(f.tend) : "–", f.u90 >= UMBRALES.minUnid90 ? "30 d contra promedio de 90 d" : `menos de ${UMBRALES.minUnid90} unid. vendidas en 90 d`),
     tileMP("SKUs asociados", `${fN(f.nVenta)} / ${fN(f.nSkus)}`, "con venta en 90 d / total en el Excel"));
 
@@ -2120,7 +2242,7 @@ function vistaMPDetalle(cod) {
     const hoyIso = hoyAR(), anio = +hoyIso.slice(0, 4), mes0 = +hoyIso.slice(5, 7) - 1;
     const meses = Array.from({ length: 13 }, (_, i) => new Date(Date.UTC(anio, mes0 - 12 + i, 1)).toISOString().slice(0, 7));
     const conF = mens.filas.some((x) => x.consumo !== null && x.consumo > 0);
-    const valor = (x) => (conF ? x.consumo || 0 : x.unid);
+    const valor = (x) => (conF ? (x.consumo || 0) * esc : x.unid);
     const tot = new Map();
     for (const x of mens.filas) tot.set(x.sku, (tot.get(x.sku) || 0) + valor(x));
     const orden = [...tot.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k);
@@ -2134,8 +2256,8 @@ function vistaMPDetalle(cod) {
     }
     chartCard = series.length ? [conF ? null : h("p", { class: "warnmsg", style: "margin:0 0 6px", text: "Sin factor de conversión: se grafican unidades vendidas, no consumo." }), series.length > 1 ? legend(series) : null, chartEl]
       : h("p", { class: "muted", text: "Sin ventas en los últimos 13 meses." });
-    if (series.length) requestAnimationFrame(() => barChart(chartEl, { labels: meses, series, height: 260, xLabel: fMes, fmt: (v) => (v === 0 ? "0" : fC(v)),
-      tipTitle: (l) => `${fMes(l)}${l === hoyIso.slice(0, 7) ? " (mes en curso)" : ""} · ${conF ? "consumo en " + f.unidad : "unidades vendidas"}` }));
+    if (series.length) requestAnimationFrame(() => barChart(chartEl, { labels: meses, series, height: 260, xLabel: fMes, fmt: (v) => (v === 0 ? "0" : enMP ? fMP(v) : fC(v)),
+      tipTitle: (l) => `${fMes(l)}${l === hoyIso.slice(0, 7) ? " (mes en curso)" : ""} · ${conF ? (enMP ? "consumo en materias primas" : `consumo en ${f.unidad}${f.modo === "plana" ? " (sin merma)" : ""}`) : "unidades vendidas"}` }));
   }
 
   const COLS = ["SKU", "Título de la publicación", "Vía", "MP por unidad vendida", "Unid. 30 d", "Unid. 90 d", "Consumo 30 d", "Consumo 90 d", "% del consumo 90 d", "Última venta", "Estado"];
@@ -2144,9 +2266,10 @@ function vistaMPDetalle(cod) {
       h("td", { class: "skucol" }, h("b", { text: r.sku })),
       h("td", { class: "nm ink2", style: "max-width:240px", title: r.titulo, text: r.titulo }),
       h("td", { class: "ink2", style: "white-space:nowrap", text: r.via }),
-      h("td", { class: "num" + (r.factor === null ? " warnmsg" : ""), text: fF(r.factor) }),
+      h("td", { class: "num" + (r.factor === null ? " warnmsg" : "") }, r.factor === null ? fF(null)
+        : [h("div", { text: enMP ? fMP(r.factor * esc) : nf4.format(r.factor) }), enMP && esc === 1 ? null : h("div", { class: "mpsub", text: enMP ? `= ${nf4.format(r.factor)} ${f.unidad}` : f.unidad })]),
       h("td", { class: "num", text: fN(r.u30) }), h("td", { class: "num", text: fN(r.u90) }),
-      h("td", { class: "num", text: r.c30 === null ? "–" : fC(r.c30) }), h("td", { class: "num", text: r.c90 === null ? "–" : fC(r.c90) }),
+      h("td", { class: "num", text: r.c30 === null ? "–" : enMP ? fMP(r.c30 * esc) : fC(r.c30) }), h("td", { class: "num", text: r.c90 === null ? "–" : enMP ? fMP(r.c90 * esc) : fC(r.c90) }),
       h("td", { class: "num", text: r.c90 && f.c90 ? fP(r.c90 / f.c90) : "–" }),
       h("td", { class: "num", text: fD(r.ultima) + (r.diasSin > 0 && r.diasSin < 9999 ? ` (${r.diasSin} d)` : "") }),
       h("td", {}, ESTADOS[r.estado]()));
@@ -2162,12 +2285,13 @@ function vistaMPDetalle(cod) {
     h("div", { class: "card" },
       h("div", { class: "card-head" },
         h("div", {}, h("h2", {}, h("span", { class: "mpname" }, h("b", { text: cod }), h("span", { class: "nm2", text: f.nombre !== cod ? f.nombre : "" }))),
-          h("p", { class: "sub", text: `Consumo en ${f.unidad}${m ? "" : " · esta materia prima no está en la hoja MATERIA PRIMA"} · ventas válidas a hoy, todos los canales.` })),
+          h("p", { class: "sub", text: `${enMP ? `Consumo en materias primas (${f.equiv}, columna "Unidades por Paquete")` : `Consumo en ${f.unidad}${f.modo === "plana" ? ", sin merma" : ""}`}${m ? "" : " · esta materia prima no está en la hoja MATERIA PRIMA"} · ventas válidas a hoy, todos los canales.` })),
         h("div", { class: "toolbar" }, volver, h("button", { class: "btn", text: "Excel ↓", onclick: () => exportarMP(cod) }))),
       rel.childNodes.length ? rel : null),
+    enMP ? null : h("div", { class: "banner" }, f.modo === "dudoso" ? tag("down", "warn", "Dudoso:") : h("b", { text: "Próximamente:" }), " " + f.motivo + (f.modo === "dudoso" ? ` Mientras tanto, el consumo se muestra en ${f.unidad.replace(/\.$/, "")}.` : "")),
     tiles,
     sinFactorVendidos.length ? h("div", { class: "banner" }, tag("down", "warn", ""), ` ${fN(sinFactorVendidos.length)} SKU${sinFactorVendidos.length > 1 ? "s" : ""} vendido${sinFactorVendidos.length > 1 ? "s" : ""} sin factor (${fN(f.sinF90)} unidades en 90 d): no suman consumo. Revisá en el Excel Cant. Unidades Total, Division Cantidad del Padre, Cantidad del Padre o el dividendo de la cadena.`) : null,
-    h("div", { class: "card" }, h("h2", { text: "Consumo por mes (últimos 13 meses)" }), h("p", { class: "sub", text: "Ventas válidas × factor, apiladas por SKU. El mes actual está incompleto." }), chartCard),
+    h("div", { class: "card" }, h("h2", { text: "Consumo por mes (últimos 13 meses)" }), h("p", { class: "sub", text: `Ventas válidas × factor${enMP ? " ÷ Unidades por Paquete (en materias primas)" : ` (en ${f.unidad}${f.modo === "plana" ? ", sin merma" : ""})`}, apiladas por SKU. El mes actual está incompleto.` }), chartCard),
     h("div", { class: "card" },
       h("div", { class: "card-head" },
         h("div", {}, h("h2", { text: "SKUs que usan esta materia prima" }), h("p", { class: "sub", text: `${fN(filas.length)} de ${fN(todas.length)} SKUs del Excel (directos o por la cadena). Doble clic en una fila para analizar ese SKU.` })),
@@ -2182,17 +2306,25 @@ function exportarMP(cod) {
   if (!window.XLSX) { alert("La librería de Excel todavía está cargando. Probá de nuevo en unos segundos."); return; }
   const M = state.mp, C = calcularMP(), f = C.filas.find((x) => x.codigo === cod), m = M.materias.get(cod);
   const filas = filasHijosMP(cod);
+  const cm = f || (m ? modoConsumoMP(m, cod, C.dud, C.copiaVieja) : { modo: "dudoso", motivo: "No está en la hoja MATERIA PRIMA." });
+  const esc = cm.modo === "mp" ? 1 / m.unid_bulto : null, uni = unidadMP(m);
+  const enMP = (v) => (esc && v !== null && v !== undefined ? +(v * esc).toFixed(6) : "");
+  const n4 = (v) => (v === null || v === undefined ? "" : +v.toFixed(4));
+  const estadoMP = cm.modo === "mp" ? "OK" : cm.modo === "plana" ? "Próximamente (plana: falta la merma)" : "Dudoso";
   const aoa = [
-    ["Materia prima", `${cod} - ${descMP(m, cod)}`], ["Unidad de consumo", unidadMP(m)], ["Datos a", hoyAR()],
-    ["Consumo 30 d", f ? +f.c30.toFixed(4) : 0], ["Consumo 90 d", f ? +f.c90.toFixed(4) : 0], ["Consumo/día 30 d", f ? +f.v30.toFixed(4) : 0], [],
-    ["SKU", "Título", "Vía", "MP por unidad vendida", "Unid. 30 d", "Unid. 90 d", "Unid. 12 m", "Consumo 30 d", "Consumo 90 d", "Última venta"],
-    ...filas.map((r) => [r.sku, r.titulo, r.via, r.factor === null ? "sin factor" : r.factor, r.u30, r.u90, r.u365, r.c30 === null ? "" : +r.c30.toFixed(4), r.c90 === null ? "" : +r.c90.toFixed(4), r.ultima || ""]),
+    ["Materia prima", `${cod} - ${descMP(m, cod)}`], ["Unidad de consumo", uni], ["1 materia prima (Unidades por Paquete)", m && m.unid_bulto > 0 ? `${m.unid_bulto} ${uni}` : "sin dato"],
+    ["Consumo en materias primas", estadoMP + (cm.modo === "mp" ? "" : ` — ${cm.motivo}`)], ["Datos a", hoyAR()], [],
+    ["", "En materias primas", `En ${uni}${cm.modo === "plana" ? " (sin merma)" : ""}`],
+    ["Consumo 30 d", enMP(f && f.c30), f ? n4(f.c30) : 0], ["Consumo 90 d", enMP(f && f.c90), f ? n4(f.c90) : 0], ["Consumo/día 30 d", enMP(f && f.v30), f ? n4(f.v30) : 0], [],
+    ["SKU", "Título", "Vía", "MP por unidad vendida", `Factor (${uni})`, "Unid. 30 d", "Unid. 90 d", "Unid. 12 m", "Consumo 30 d (MP)", "Consumo 90 d (MP)", `Consumo 30 d (${uni})`, `Consumo 90 d (${uni})`, "Última venta"],
+    ...filas.map((r) => [r.sku, r.titulo, r.via, r.factor === null ? "sin factor" : esc ? enMP(r.factor) : estadoMP, r.factor === null ? "sin factor" : r.factor, r.u30, r.u90, r.u365,
+      enMP(r.c30), enMP(r.c90), n4(r.c30), n4(r.c90), r.ultima || ""]),
   ];
   const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.aoa_to_sheet(aoa); ws["!cols"] = [{ wch: 44 }, { wch: 48 }, { wch: 16 }, { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 12 }];
+  const ws = XLSX.utils.aoa_to_sheet(aoa); ws["!cols"] = [{ wch: 44 }, { wch: 48 }, { wch: 20 }, { wch: 14 }, { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 12 }];
   XLSX.utils.book_append_sheet(wb, ws, "SKUs");
   const mens = M.mensual.get(cod);
-  if (mens && mens.filas) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Mes", "SKU", "Unidades", "Consumo"], ...mens.filas.map((x) => [x.mes, x.sku, x.unid, x.consumo === null ? "" : +x.consumo.toFixed(4)])]), "Mensual");
+  if (mens && mens.filas) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Mes", "SKU", "Unidades", "Consumo (MP)", `Consumo (${uni})`], ...mens.filas.map((x) => [x.mes, x.sku, x.unid, x.consumo === null ? "" : enMP(x.consumo), x.consumo === null ? "" : n4(x.consumo)])]), "Mensual");
   XLSX.writeFile(wb, `MateriaPrima_${String(cod).replace(/[^A-Za-z0-9_-]+/g, "_")}_${hoyAR()}.xlsx`);
 }
 
@@ -2237,13 +2369,15 @@ const FUNCIONAMIENTO = [
   ["Pestaña Materia prima", [
     "Para entrar por la materia prima: elegís un papel, tinta, imán, tela, etc. y ves qué SKUs la usan, cuánto vendió cada uno y cuánta materia prima consumieron esas ventas.",
     "• Cadena completa: si una materia prima sale de otra (ej. la 588, Kraft A4, sale del pliego 58: 16 A4 por pliego), las ventas del A4 también cuentan en el pliego, convertidas a pliegos.",
-    "• Consumo = unidades vendidas × factor. Factor = Cant. Unidades Total ÷ Division Cantidad del Padre ÷ Cantidad del Padre (BASE GENERAL) y, en cada salto de la cadena, ÷ Dividendo materia prima (MATERIA PRIMA). Ej.: \"15 x5\" = 100 ÷ 1 ÷ 20 = 5 paquetes de la MP 339.",
+    "• Consumo en materias primas = unidades vendidas × factor ÷ Unidades por Paquete. El factor (Cant. Unidades Total ÷ Division Cantidad del Padre ÷ Cantidad del Padre en BASE GENERAL y, en cada salto de la cadena, ÷ Dividendo materia prima) da el consumo en la unidad de la materia prima: paquetes, hojas, metros. \"Unidades por Paquete\" (columna L de MATERIA PRIMA) dice cuántas de esas trae 1 materia prima tal cual se compra. Ej.: vender 1 \"15\" = 1 paquete de 20 de la 339; la 339 trae 50 paquetes → 0,02 MP. Al lado, chico, va el consumo en su unidad.",
+    "• \"próximamente\": las planas (columna \"es plana\" = 1: resmas y pliegos que se cortan). Al cortarlas hay merma (recortes que se pierden), así que el consumo real es mayor que la suma de los cortes. Se va a mostrar cuando se cargue el % de merma; mientras, ves las hojas sin merma.",
+    "• \"dudoso\": la materia prima tiene \"Unidades por Paquete\" vacía o que no es un número, o un SKU de bulto cerrado (\"BC\") que no da 1 materia prima entera. No se muestra el consumo en materias primas (sí en su unidad) y aparece en los avisos del Excel para que Stock lo corrija. El recuadro \"Materias primas dudosas\" las filtra.",
     "• El ranking es a hoy (30 y 90 días) y no depende del período ni del canal de arriba. Tocá una materia prima para ver el detalle: consumo por mes, de qué sale, qué alimenta y sus SKUs con el consumo de cada uno. \"Ver estos SKUs en Resumen\" los lleva al análisis de siempre (ahí sí valen los filtros).",
     "• \"SKUs vendidos sin materia prima\" lista lo que no se puede convertir (falta en el Excel o le falta un dato). Copiá la lista y pasásela a Stock para completar el Excel.",
     "• Una ⚠ en el consumo indica SKUs vendidos sin factor: su consumo no se suma hasta corregir el Excel.",
   ]],
   ["Materia prima: de dónde sale y cómo se actualiza", [
-    "Sale del Excel maestro \"ver. octubre…\": hoja BASE GENERAL (codigo mat prima, SKU, Cant. Unidades Total, Division Cantidad del Padre, Cantidad del Padre) y hoja MATERIA PRIMA (Codigo, sku, Cantidad mínima, Unidad, CODIGO 1 y 2 con su Dividendo, y la columna de papeles cortados). Las columnas se buscan por su título, no por su letra.",
+    "Sale del Excel maestro \"ver. octubre…\": hoja BASE GENERAL (codigo mat prima, SKU, Cant. Unidades Total, Division Cantidad del Padre, Cantidad del Padre) y hoja MATERIA PRIMA (Codigo, sku, Cantidad mínima, Unidades por Paquete, Unidad, CODIGO 1 y 2 con su Dividendo, la columna de papeles cortados y es plana). Las columnas se buscan por su título, no por su letra.",
     "La app guarda una copia en la base: así funciona en cualquier PC o celular, aunque el Excel esté cerrado. Arriba de la pestaña dice de cuándo es y quién la guardó.",
     "Actualizarla (usuarios con permiso de importación, en la PC que tiene el Excel abierto): 1) abrí el \"ver. octubre\" en Excel de escritorio; 2) abrí calendarios-agente.exe (el mismo de Inventario de calendarios); 3) entrá a esta pestaña: la app detecta el Excel sola y lo compara con la copia; 4) si hay cambios, tocá \"Revisar y guardar\", mirá la lista y tocá \"Guardar en la base\".",
     "La app solo LEE el Excel: no escribe ni guarda nada en el libro. Lee lo que está en pantalla, aunque no esté guardado.",
@@ -2279,6 +2413,7 @@ const FUNCIONAMIENTO = [
     "• Hoy es un día incompleto hasta las 23:59: una racha sin ventas que incluye hoy puede cerrarse apenas entre una venta.",
     "• Materia prima: los kits (ej. \"221 4colores\") consumen la materia prima del kit (ej. 301CAMN), no las botellas sueltas. Si una materia prima tiene dos componentes (CODIGO 1 y CODIGO 2), sus ventas suman en los dos.",
     "• Materia prima: si un corte solo tiene la columna de papeles cortados (sin CODIGO 1 ni dividendo), sus ventas no se pasan al pliego. Aparece en los avisos del Excel para completarlo.",
+    "• Materia prima: las planas todavía no muestran consumo en materias primas (falta el % de merma). Lo que se corta y no está marcado como plana (ej. rollos de imán) se calcula sin merma.",
   ]],
 ];
 function mostrarFuncionamiento() {
